@@ -5,7 +5,7 @@ from transformers import Trainer, TrainingArguments
 
 epochs = 10
 batch_size = 8
-block_size = 2500
+block_size = 1024
 max_id = 30
 out_dir = 'models/sat-gpt'
 
@@ -47,9 +47,14 @@ class SATDataset(Dataset):
     def __getitem__(self, i):
         # Tokenize the line
         tokens = self.tokenizer(self.examples[i], truncation=True, padding='max_length', max_length=self.block_size, return_tensors="pt")
+        # Extract input_ids as a tensor
+        input_ids = tokens["input_ids"].squeeze()
+
+        # Create labels (which are the same as input_ids for language modeling)
+        labels = input_ids.clone()
         
-        # Return a dictionary
-        return {key: val.squeeze() for key, val in tokens.items()}
+        # Return a dictionary with input_ids and labels
+        return {"input_ids": input_ids, "labels": labels}
 
 
 # Initialize custom tokenizer
@@ -60,6 +65,7 @@ tokenizer.add_special_tokens({'pad_token': '[EOS]'})
 config = GPT2Config(
     vocab_size=len(tokenizer.vocab),
     n_positions=block_size,
+    n_embd=360,
     bos_token_id=tokenizer.vocab["[EOS]"],
     eos_token_id=tokenizer.vocab["[EOS]"],
 )
@@ -82,7 +88,7 @@ train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 # Training arguments with evaluation strategy and save strategy
 training_args = TrainingArguments(
     output_dir=out_dir,
-    num_train_epochs=4,
+    num_train_epochs=epochs,
     per_device_train_batch_size=8,
     logging_steps=100,
     save_steps=500,

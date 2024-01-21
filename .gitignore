@@ -12,6 +12,9 @@ train.npy
 val.npy
 meta.pkl
 
+llama_finetune_sat.py
+models/
+
 model_ckpts/
 wandb/
 train.txt

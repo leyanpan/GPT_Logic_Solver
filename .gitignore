@@ -18,3 +18,4 @@ models/
 model_ckpts/
 wandb/
 train.txt
+test.txt

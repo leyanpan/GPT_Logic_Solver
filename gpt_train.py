@@ -2,60 +2,32 @@ import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 from transformers import GPT2Config, GPT2LMHeadModel, PreTrainedTokenizer
 from transformers import Trainer, TrainingArguments
+from sat_dataset import SATDataset, CustomTokenizer
+from utils import get_dataset_path, debug_log
+import utils
+import time
 
+### Parameters ###
 epochs = 10
 batch_size = 8
-block_size = 1024
+block_size = 600
 max_id = 30
 out_dir = 'models/sat-gpt'
+dataset = "datasets/SAT_6_10"
+debug = False
+append_timestamp = True
+use_wandb = True
+##################
+
+exec(open('configurator.py').read())
+utils.debug = debug
+
+# To prevent overwriting existing models
+if append_timestamp:
+    out_dir += f"-{time.strftime('%Y%m%d-%H%M%S')}"
+
 
 custom_tokens = [str(i) for i in range(max_id + 1)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]"]
-
-# Custom tokenizer with a placeholder list of tokens
-class CustomTokenizer(PreTrainedTokenizer):
-    def __init__(self, vocab_list, **kwargs):
-        super().__init__(vocab_file=None, **kwargs)
-        self.unk_token = "[UNK]"
-        self.vocab = {v: k for k, v in enumerate(vocab_list)}
-        self.ids_to_tokens = {k: v for v, k in self.vocab.items()}
-
-    def _convert_token_to_id(self, token):
-        return self.vocab.get(token)
-
-    def _convert_id_to_token(self, id):
-        return self.ids_to_tokens.get(id)
-
-    def tokenize(self, text):
-        return text.split()
-
-# Custom dataset class
-class SATDataset(Dataset):
-    def __init__(self, file_path, tokenizer, block_size):
-        self.tokenizer = tokenizer
-        self.block_size = block_size
-        self.examples = []
-
-        with open(file_path, 'r') as f:
-            for line in f:
-                line = line.strip().replace("-", "- ")
-                if len(line) > 0:
-                    self.examples.append(line)
-
-    def __len__(self):
-        return len(self.examples)
-
-    def __getitem__(self, i):
-        # Tokenize the line
-        tokens = self.tokenizer(self.examples[i], truncation=True, padding='max_length', max_length=self.block_size, return_tensors="pt")
-        # Extract input_ids as a tensor
-        input_ids = tokens["input_ids"].squeeze()
-
-        # Create labels (which are the same as input_ids for language modeling)
-        labels = input_ids.clone()
-        
-        # Return a dictionary with input_ids and labels
-        return {"input_ids": input_ids, "labels": labels}
-
 
 # Initialize custom tokenizer
 tokenizer = CustomTokenizer(custom_tokens)
@@ -65,7 +37,6 @@ tokenizer.add_special_tokens({'pad_token': '[EOS]'})
 config = GPT2Config(
     vocab_size=len(tokenizer.vocab),
     n_positions=block_size,
-    n_embd=360,
     bos_token_id=tokenizer.vocab["[EOS]"],
     eos_token_id=tokenizer.vocab["[EOS]"],
 )
@@ -74,9 +45,7 @@ config = GPT2Config(
 model = GPT2LMHeadModel(config)
 
 # Load dataset
-dataset_path = "datasets/SAT_50k_shuf/train.txt"  # Replace with your dataset file path
-
-# Load dataset
+dataset_path = get_dataset_path(dataset)
 dataset = SATDataset(dataset_path, tokenizer, block_size=block_size)
 
 
@@ -89,7 +58,7 @@ train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 training_args = TrainingArguments(
     output_dir=out_dir,
     num_train_epochs=epochs,
-    per_device_train_batch_size=8,
+    per_device_train_batch_size=batch_size,
     logging_steps=100,
     save_steps=500,
     eval_steps=500,
@@ -97,7 +66,8 @@ training_args = TrainingArguments(
     save_total_limit=2,
     load_best_model_at_end=True,
     metric_for_best_model="loss",
-    greater_is_better=False
+    greater_is_better=False,
+    report_to="wandb" if use_wandb else "none",
 )
 
 # Initialize Trainer with train and validation datasets

@@ -3,6 +3,7 @@ from transformers import GPT2LMHeadModel, PreTrainedTokenizer
 from sat_dataset import CustomTokenizer
 import utils
 from utils import debug_log
+import os
 
 ### Parameters ###
 max_gen_len = 600
@@ -13,13 +14,16 @@ max_id = 30
 eval = True
 debug = True
 seed = 0
-input_file = 'datasets/SAT_6_10/train.txt'
+dataset = 'datasets/SAT_6_10'
+file_name = 'test.txt'
 model_dir = 'models/sat-6-10-Jan24'  # The directory where your model is saved
 ##################
 
 
+exec(open('configurator.py').read())
 custom_tokens = [str(i) for i in range(max_id + 1)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]"]
 
+input_file = os.path.join(dataset, file_name)
 
 utils.debug = True
 torch.manual_seed(seed)

@@ -8,9 +8,11 @@ from transformers import (AutoModel,
                           PreTrainedTokenizer, 
                           Trainer, 
                           TrainingArguments, 
-                          AdamW, 
                           get_linear_schedule_with_warmup, 
                           get_cosine_schedule_with_warmup)
+
+from torch.optim import AdamW
+
 
 from sat_dataset import SATDataset, CustomTokenizer
 from utils import get_dataset_path, debug_log
@@ -29,21 +31,21 @@ class NanoGPTTrainer(Trainer):
                                lr=6e-4, 
                                betas=(0.9, 0.95), 
                                weight_decay=0.1)
-        
         return self.optimizer
 
     
-    def create_scheduler(self, 
-                         num_training_steps: int, 
-                         **kwargs):
+    def create_scheduler(self, num_training_steps: int, optimizer=None):
         '''
         TODO
         '''
         
-        return get_cosine_schedule_with_warmup(self.optimizer, 
-                                               num_warmup_steps=2000, 
-                                               num_training_steps=num_training_steps)
-
+        if optimizer is None:
+            optimizer = self.optimizer
+            
+        self.lr_scheduler = get_cosine_schedule_with_warmup(optimizer, 
+                                                            num_warmup_steps=2000, 
+                                                            num_training_steps=num_training_steps)
+        return self.lr_scheduler
 
     def training_step(self, 
                       model, 
@@ -59,7 +61,7 @@ class NanoGPTTrainer(Trainer):
 ### Parameters ###
 epochs = 10
 batch_size = 12
-block_size = 1024
+block_size = 600
 max_id = 30
 out_dir = 'models/sat-gpt'
 dataset = "datasets/SAT_6_10"

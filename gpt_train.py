@@ -57,11 +57,25 @@ class NanoGPTTrainer(Trainer):
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         
         return outputs
+    
+    def save_vocabulary(self, 
+                        save_directory, 
+                        filename_prefix=None):
+        '''
+        TODO
+        '''
+        vocab_file = os.path.join(save_directory, (filename_prefix + "-" if filename_prefix else "") + "vocab.txt")
+        
+        with open(vocab_file, "w", encoding="utf-8") as writer:
+            for token in self.vocab.keys():
+                writer.write(token + "\n")
+
+        return (vocab_file,)
 
 ### Parameters ###
 epochs = 10
 batch_size = 12
-block_size = 600
+block_size = 800
 max_id = 30
 out_dir = 'models/sat-gpt'
 dataset = "datasets/SAT_6_10"

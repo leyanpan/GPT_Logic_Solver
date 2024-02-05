@@ -1,16 +1,81 @@
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split
-from transformers import GPT2Config, GPT2LMHeadModel, PreTrainedTokenizer
-from transformers import Trainer, TrainingArguments
+
+from transformers import (AutoModel, 
+                          GPT2Config,
+                          GPT2LMHeadModel, 
+                          GPT2Model,
+                          PreTrainedTokenizer, 
+                          Trainer, 
+                          TrainingArguments, 
+                          get_linear_schedule_with_warmup, 
+                          get_cosine_schedule_with_warmup)
+
+from torch.optim import AdamW
+
+
 from sat_dataset import SATDataset, CustomTokenizer
 from utils import get_dataset_path, debug_log
 import utils
 import time
 
+### Custom code block ###
+
+class NanoGPTTrainer(Trainer):
+    
+    def create_optimizer(self):
+        '''
+        TODO
+        '''
+        self.optimizer = AdamW(self.model.parameters(), 
+                               lr=6e-4, 
+                               betas=(0.9, 0.95), 
+                               weight_decay=0.1)
+        return self.optimizer
+
+    
+    def create_scheduler(self, num_training_steps: int, optimizer=None):
+        '''
+        TODO
+        '''
+        
+        if optimizer is None:
+            optimizer = self.optimizer
+            
+        self.lr_scheduler = get_cosine_schedule_with_warmup(optimizer, 
+                                                            num_warmup_steps=2000, 
+                                                            num_training_steps=num_training_steps)
+        return self.lr_scheduler
+
+    def training_step(self, 
+                      model, 
+                      inputs):
+        '''
+        TODO
+        '''
+        outputs = super().training_step(model, inputs)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        
+        return outputs
+    
+    def save_vocabulary(self, 
+                        save_directory, 
+                        filename_prefix=None):
+        '''
+        TODO
+        '''
+        vocab_file = os.path.join(save_directory, (filename_prefix + "-" if filename_prefix else "") + "vocab.txt")
+        
+        with open(vocab_file, "w", encoding="utf-8") as writer:
+            for token in self.vocab.keys():
+                writer.write(token + "\n")
+
+        return (vocab_file,)
+
 ### Parameters ###
 epochs = 10
-batch_size = 8
-block_size = 600
+batch_size = 12
+block_size = 800
 max_id = 30
 out_dir = 'models/sat-gpt'
 dataset = "datasets/SAT_6_10"
@@ -34,12 +99,15 @@ tokenizer = CustomTokenizer(custom_tokens)
 tokenizer.add_special_tokens({'pad_token': '[EOS]'})
 
 # Initialize GPT-2 configuration
-config = GPT2Config(
-    vocab_size=len(tokenizer.vocab),
-    n_positions=block_size,
-    bos_token_id=tokenizer.vocab["[EOS]"],
-    eos_token_id=tokenizer.vocab["[EOS]"],
-)
+config = GPT2Config(vocab_size=len(tokenizer.vocab), 
+                    n_ctx=1024,        
+                    n_embd=768,        
+                    n_layer=12,       
+                    n_head=12, 
+                    n_positions=block_size,
+                    bos_token_id=tokenizer.vocab["[EOS]"],
+                    eos_token_id=tokenizer.vocab["[EOS]"],
+                )
 
 # Initialize GPT-2 model
 model = GPT2LMHeadModel(config)
@@ -71,12 +139,11 @@ training_args = TrainingArguments(
 )
 
 # Initialize Trainer with train and validation datasets
-trainer = Trainer(
-    model=model,
-    args=training_args,
-    train_dataset=train_dataset,
-    eval_dataset=val_dataset,
-)
+trainer = NanoGPTTrainer(model=model,
+                         args=training_args,
+                         train_dataset=train_dataset,
+                         eval_dataset=val_dataset,
+                        )
 
 # Train the model
 trainer.train()

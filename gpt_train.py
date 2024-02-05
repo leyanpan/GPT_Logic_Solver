@@ -15,62 +15,10 @@ from torch.optim import AdamW
 
 
 from sat_dataset import SATDataset, CustomTokenizer
+from sat_trainer import SATHFTrainer
 from utils import get_dataset_path, debug_log
 import utils
 import time
-
-### Custom code block ###
-
-class NanoGPTTrainer(Trainer):
-    
-    def create_optimizer(self):
-        '''
-        TODO
-        '''
-        self.optimizer = AdamW(self.model.parameters(), 
-                               lr=6e-4, 
-                               betas=(0.9, 0.95), 
-                               weight_decay=0.1)
-        return self.optimizer
-
-    
-    def create_scheduler(self, num_training_steps: int, optimizer=None):
-        '''
-        TODO
-        '''
-        
-        if optimizer is None:
-            optimizer = self.optimizer
-            
-        self.lr_scheduler = get_cosine_schedule_with_warmup(optimizer, 
-                                                            num_warmup_steps=2000, 
-                                                            num_training_steps=num_training_steps)
-        return self.lr_scheduler
-
-    def training_step(self, 
-                      model, 
-                      inputs):
-        '''
-        TODO
-        '''
-        outputs = super().training_step(model, inputs)
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        
-        return outputs
-    
-    def save_vocabulary(self, 
-                        save_directory, 
-                        filename_prefix=None):
-        '''
-        TODO
-        '''
-        vocab_file = os.path.join(save_directory, (filename_prefix + "-" if filename_prefix else "") + "vocab.txt")
-        
-        with open(vocab_file, "w", encoding="utf-8") as writer:
-            for token in self.vocab.keys():
-                writer.write(token + "\n")
-
-        return (vocab_file,)
 
 ### Parameters ###
 epochs = 10
@@ -139,7 +87,7 @@ training_args = TrainingArguments(
 )
 
 # Initialize Trainer with train and validation datasets
-trainer = NanoGPTTrainer(model=model,
+trainer = SATHFTrainer(model=model,
                          args=training_args,
                          train_dataset=train_dataset,
                          eval_dataset=val_dataset,

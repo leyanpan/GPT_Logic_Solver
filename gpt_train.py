@@ -30,6 +30,7 @@ dataset = "datasets/SAT_6_10"
 debug = False
 append_timestamp = True
 use_wandb = True
+remove_trace = False
 ##################
 
 exec(open('configurator.py').read())
@@ -62,7 +63,7 @@ model = GPT2LMHeadModel(config)
 
 # Load dataset
 dataset_path = get_dataset_path(dataset)
-dataset = SATDataset(dataset_path, tokenizer, block_size=block_size)
+dataset = SATDataset(dataset_path, tokenizer, block_size=block_size, remove_trace=remove_trace)
 
 
 # Split the dataset into training and validation sets

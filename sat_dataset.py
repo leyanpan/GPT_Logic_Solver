@@ -20,7 +20,7 @@ class CustomTokenizer(PreTrainedTokenizer):
 
 # Custom dataset class
 class SATDataset(Dataset):
-    def __init__(self, file_path, tokenizer, block_size):
+    def __init__(self, file_path, tokenizer, block_size, remove_trace=False):
         self.tokenizer = tokenizer
         self.block_size = block_size
         self.examples = []
@@ -29,6 +29,8 @@ class SATDataset(Dataset):
             for line in f:
                 line = line.strip().replace("-", "- ")
                 if len(line) > 0:
+                    if remove_trace:
+                        line = line[:line.find("[SEP]") + len("[SEP]")] + " " + line[line.find("UNSAT") if "UNSAT" in line else line.find("SAT"):]
                     self.examples.append(line)
 
     def __len__(self):

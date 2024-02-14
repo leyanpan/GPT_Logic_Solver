@@ -1,20 +1,23 @@
 import torch
-from transformers import GPT2LMHeadModel, PreTrainedTokenizer
-from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score
+from transformers import GPT2LMHeadModel
 import os
-from sat_dataset import CustomTokenizer
-import utils
+from sat_dataset import CustomTokenizer  
+import utils  
+from sklearn.metrics import (f1_score, 
+                             accuracy_score, 
+                             precision_score, 
+                             recall_score)
+
 
 ### Parameters ###
 max_gen_len = 600
-temperature = 0.01  # Low temperature since we're doing formal reasoning
-batch_size = 5  # Adjust based on your GPU/CPU memory
-dataset = 'datasets/SAT_6_10'
+temperature = 0.01  
+batch_size = 5
+dataset = '/home/drdata/llm/models/HF_SAT/datasets/SAT_6_10'
 file_name = 'test.txt'
-model_dir = 'models/sat-gpt-20240130-105117'  # The directory where your model is saved
+model_dir = '/home/drdata/llm/models/HF_SAT/models/sat-gpt-20240130-141141'
 ##################
 
-# Assuming configurator.py sets some global configs, keep it as it is
 exec(open('configurator.py').read())
 
 input_file = os.path.join(dataset, file_name)
@@ -23,13 +26,11 @@ torch.manual_seed(0)
 torch.cuda.manual_seed(0)
 
 def line_sat(line, sep=' '):
-    assert not ((sep + 'UNSAT') in line and (sep + 'SAT') in line) or sep == ''
     if sep + 'UNSAT' in line:
         return False
     elif sep + 'SAT' in line:
         return True
-    else:
-        return None
+    return None
 
 def load_model_and_tokenizer(model_dir):
     custom_tokens = [str(i) for i in range(31)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]"]
@@ -43,17 +44,37 @@ def batch_generate_completions(input_file, model, tokenizer, batch_size, max_len
     true_labels = []
     pred_labels = []
     with open(input_file, 'r') as file:
-        lines = [line.strip() for line in file.readlines()]
+        lines = [line.strip().replace("-", "- ") for line in file.readlines()]
     
     for i in range(0, len(lines), batch_size):
         batch_lines = lines[i:i+batch_size]
         batch_prompts = [line[:line.find("[SEP]") + len("[SEP]")] for line in batch_lines]
         batch_true_labels = [line_sat(line) for line in batch_lines]
         true_labels.extend(batch_true_labels)
-
-        inputs = tokenizer(batch_prompts, return_tensors="pt", padding=True, truncation=True, max_length=max_length)
-        outputs = model.generate(**inputs, max_length=max_length, temperature=temperature, num_return_sequences=1)
-
+        
+        # Tokenize the prompts and extract input_ids and attention_mask
+        tokenized_outputs = tokenizer(batch_prompts, 
+                                      return_tensors="pt", 
+                                      padding=True, 
+                                      truncation=True,
+                                      max_length=max_length)
+        
+        input_ids = tokenized_outputs["input_ids"]
+        attention_mask = tokenized_outputs.get("attention_mask")  
+        
+        # Generate outputs
+        if attention_mask is not None:
+            outputs = model.generate(input_ids=input_ids, 
+                                     attention_mask=attention_mask, 
+                                     max_length=max_length, 
+                                     temperature=temperature, 
+                                     num_return_sequences=1)
+        else:
+            outputs = model.generate(input_ids=input_ids, 
+                                     max_length=max_length, 
+                                     temperature=temperature,
+                                     num_return_sequences=1)
+        
         for output in outputs:
             completion = tokenizer.decode(output, skip_special_tokens=True)
             completions.append(completion)
@@ -62,7 +83,11 @@ def batch_generate_completions(input_file, model, tokenizer, batch_size, max_len
     return completions, true_labels, pred_labels
 
 model, tokenizer = load_model_and_tokenizer(model_dir)
-completions, true_labels, pred_labels = batch_generate_completions(input_file, model, tokenizer, batch_size=batch_size, max_length=max_gen_len)
+completions, true_labels, pred_labels = batch_generate_completions(input_file, 
+                                                                   model, 
+                                                                   tokenizer, 
+                                                                   batch_size=batch_size, 
+                                                                   max_length=max_gen_len)
 
 # Output the completions
 for completion in completions:

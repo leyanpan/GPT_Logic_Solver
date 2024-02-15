@@ -1,3 +1,5 @@
+import torch
+
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer
 
@@ -39,11 +41,12 @@ class SATDataset(Dataset):
     def __getitem__(self, i):
         # Tokenize the line
         tokens = self.tokenizer(self.examples[i], truncation=True, padding='max_length', max_length=self.block_size, return_tensors="pt")
-        # Extract input_ids as a tensor
+        # Extract input_ids, attention mask as a tensor
         input_ids = tokens["input_ids"].squeeze()
+        attention_mask = tokens["attention_mask"].squeeze()
 
-        # Create labels (which are the same as input_ids for language modeling)
-        labels = input_ids.clone()
+        # Create a label that's the input sequence shifted left by one
+        labels = torch.cat((input_ids[1:], torch.tensor([self.tokenizer.pad_token_id])))
         
         # Return a dictionary with input_ids and labels
-        return {"input_ids": input_ids, "labels": labels}
+        return {"input_ids": input_ids, "labels": labels, "attention_mask": attention_mask}

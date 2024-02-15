@@ -21,7 +21,7 @@ import utils
 import time
 
 ### Parameters ###
-epochs = 10
+epochs = 20
 batch_size = 12
 block_size = 800
 max_id = 30

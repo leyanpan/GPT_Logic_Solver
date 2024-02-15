@@ -21,7 +21,7 @@ import utils
 import time
 
 ### Parameters ###
-epochs = 10
+epochs = 20
 batch_size = 12
 block_size = 800
 max_id = 30
@@ -31,6 +31,9 @@ debug = False
 append_timestamp = True
 use_wandb = True
 remove_trace = False
+n_layer = 12
+n_embd = 768
+n_head = 12
 ##################
 
 exec(open('configurator.py').read())
@@ -49,10 +52,10 @@ tokenizer.add_special_tokens({'pad_token': '[EOS]'})
 
 # Initialize GPT-2 configuration
 config = GPT2Config(vocab_size=len(tokenizer.vocab), 
-                    n_ctx=1024,        
-                    n_embd=768,        
-                    n_layer=12,       
-                    n_head=12, 
+                    n_ctx=block_size,        
+                    n_embd=n_embd,        
+                    n_layer=n_layer,       
+                    n_head=n_head, 
                     n_positions=block_size,
                     bos_token_id=tokenizer.vocab["[EOS]"],
                     eos_token_id=tokenizer.vocab["[EOS]"],

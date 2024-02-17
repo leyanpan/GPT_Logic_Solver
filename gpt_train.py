@@ -44,7 +44,7 @@ if append_timestamp:
     out_dir += f"-{time.strftime('%Y%m%d-%H%M%S')}"
 
 
-custom_tokens = [str(i) for i in range(max_id + 1)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]"]
+custom_tokens = [str(i) for i in range(max_id + 1)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
 
 # Initialize custom tokenizer
 tokenizer = CustomTokenizer(custom_tokens)

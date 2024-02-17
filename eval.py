@@ -33,7 +33,7 @@ def line_sat(line, sep=' '):
     return None
 
 def load_model_and_tokenizer(model_dir):
-    custom_tokens = [str(i) for i in range(31)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]"]
+    custom_tokens = [str(i) for i in range(31)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
     tokenizer = CustomTokenizer.from_pretrained(model_dir, vocab_list=custom_tokens)
     tokenizer.pad_token = "[EOS]"
     model = GPT2LMHeadModel.from_pretrained(model_dir)

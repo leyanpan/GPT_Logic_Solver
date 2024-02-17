@@ -66,7 +66,7 @@ model = GPT2LMHeadModel(config)
 
 # Load dataset
 dataset_path = get_dataset_path(dataset)
-dataset = SATDataset(dataset_path, tokenizer, block_size=block_size, remove_trace=remove_trace)
+dataset = SATDataset(dataset_path, tokenizer, max_id, block_size=block_size, remove_trace=remove_trace)
 
 
 # Split the dataset into training and validation sets

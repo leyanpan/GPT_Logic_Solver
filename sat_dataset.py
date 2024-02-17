@@ -1,3 +1,5 @@
+import re
+import random
 import torch
 
 from torch.utils.data import Dataset
@@ -22,10 +24,12 @@ class CustomTokenizer(PreTrainedTokenizer):
 
 # Custom dataset class
 class SATDataset(Dataset):
-    def __init__(self, file_path, tokenizer, block_size, remove_trace=False, shift_within_block=False):
+    def __init__(self, file_path, tokenizer, block_size, max_id, remove_trace=False, shift_within_block=False, permute_constants=False):
         self.tokenizer = tokenizer
+        self.max_id = max_id
         self.block_size = block_size
         self.shift_within_block = shift_within_block
+        self.permute_constants = permute_constants
         self.examples = []
 
         with open(file_path, 'r') as f:
@@ -43,10 +47,32 @@ class SATDataset(Dataset):
         p = torch.tensor([pad_with] * pad_size)
 
         return torch.cat((p, tensor))[0:block_size]
+    
+    def multiple_replace(self, string, rep_dict):
+        # https://stackoverflow.com/questions/6116978/how-to-replace-multiple-substrings-of-a-string
+        # note that iterating over the map causes substrings replaced earler to be replaced again; hence the need for this function
+        pattern = re.compile("|".join([re.escape(k) for k in sorted(rep_dict,key=len,reverse=True)]), flags=re.DOTALL)
+        return pattern.sub(lambda x: rep_dict[x.group(0)], string)
 
     def __getitem__(self, i):
+        line = self.examples[i]
+
+        if self.permute_constants:
+            # If this option is invoked, come up with a random permutation of
+            # the constants in the CNF formula and replace them in the line
+            # for this SAT problem only
+            constants = list(range(1, self.max_id + 1))
+            permutation = random.sample(constants, len(constants))
+
+            k = [str(c) + " " for c in constants]
+            v = [str(c) + " " for c in permutation]
+
+            p = dict(zip(k, v))
+
+            line = self.multiple_replace(line, p)
+
         # Tokenize the line
-        tokens = self.tokenizer(self.examples[i], truncation=True, padding='max_length', max_length=self.block_size, return_tensors="pt")
+        tokens = self.tokenizer(line, truncation=True, padding='max_length', max_length=self.block_size, return_tensors="pt")
 
         # Extract input_ids, attention mask as a tensor
         input_ids = tokens["input_ids"].squeeze()
@@ -83,10 +109,13 @@ if __name__ == "__main__":
     dataset = SATDataset(
         DATASET_PATH, 
         tokenizer, 
-        block_size=block_size, 
+        block_size, 
+        max_id,
         remove_trace=False,
-        shift_within_block=True)
+        shift_within_block=True,
+        permute_constants=True)
     
-    i = torch.randint(0, len(dataset), (1,)).item()
+    # i = torch.randint(0, len(dataset), (1,)).item()
+    i = 0
     test_item = dataset.__getitem__(i)
-    print(f"Example item: \n{test_item}")
+    print(f"Example item, index {i}: \n{test_item}")

@@ -26,7 +26,7 @@ batch_size = 12
 block_size = 800
 max_id = 30
 out_dir = 'models/sat-gpt'
-dataset = "datasets/SAT_6_10"
+dataset = None
 debug = False
 append_timestamp = True
 use_wandb = True
@@ -34,17 +34,28 @@ remove_trace = False
 n_layer = 12
 n_embd = 768
 n_head = 12
+rand_pos = True
+perm_vars = True
+mask_formula = True
 ##################
 
 exec(open('configurator.py').read())
 utils.debug = debug
+if debug:
+    use_wandb = False
+
+if dataset is None:
+    raise ValueError("Please specify a dataset by setting the 'dataset' variable in the config file or using --dataset=[DATASET PATH].")
 
 # To prevent overwriting existing models
 if append_timestamp:
     out_dir += f"-{time.strftime('%Y%m%d-%H%M%S')}"
 
 
-custom_tokens = [str(i) for i in range(max_id + 1)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
+# custom_tokens = [str(i) for i in range(max_id + 1)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
+custom_tokens = [str(i) for i in range(max_id + 1)] + [str(-i) for i in range(1, max_id + 1)] + ["[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
+
+print("Token Set:", custom_tokens)
 
 # Initialize custom tokenizer
 tokenizer = CustomTokenizer(custom_tokens)
@@ -66,7 +77,14 @@ model = GPT2LMHeadModel(config)
 
 # Load dataset
 dataset_path = get_dataset_path(dataset)
-dataset = SATDataset(dataset_path, tokenizer, max_id, block_size=block_size, remove_trace=remove_trace)
+dataset = SATDataset(file_path=dataset_path,
+                     tokenizer=tokenizer,
+                     max_id=max_id, 
+                     block_size=block_size, 
+                     remove_trace=remove_trace, 
+                     shift_within_block=rand_pos, 
+                     permute_constants=perm_vars,
+                     mask_formula=mask_formula)
 
 
 # Split the dataset into training and validation sets

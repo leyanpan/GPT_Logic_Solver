@@ -4,6 +4,7 @@ import torch
 
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer
+import numpy as np
 
 # Custom tokenizer with a placeholder list of tokens
 class CustomTokenizer(PreTrainedTokenizer):
@@ -24,12 +25,13 @@ class CustomTokenizer(PreTrainedTokenizer):
 
 # Custom dataset class
 class SATDataset(Dataset):
-    def __init__(self, file_path, tokenizer, block_size, max_id, remove_trace=False, shift_within_block=False, permute_constants=False):
+    def __init__(self, file_path, tokenizer, block_size, max_id, remove_trace=False, shift_within_block=False, permute_constants=False, mask_formula=False):
         self.tokenizer = tokenizer
         self.max_id = max_id
         self.block_size = block_size
         self.shift_within_block = shift_within_block
         self.permute_constants = permute_constants
+        self.mask_formula = mask_formula
         self.examples = []
 
         with open(file_path, 'r') as f:
@@ -56,6 +58,7 @@ class SATDataset(Dataset):
 
     def __getitem__(self, i):
         line = self.examples[i]
+        block_size = self.block_size
 
         if self.permute_constants:
             # If this option is invoked, come up with a random permutation of
@@ -63,16 +66,23 @@ class SATDataset(Dataset):
             # for this SAT problem only
             constants = list(range(1, self.max_id + 1))
             permutation = random.sample(constants, len(constants))
+            permutation = [0] + permutation  # 0 is a special token
 
-            k = [str(c) + " " for c in constants]
-            v = [str(c) + " " for c in permutation]
+            # k = [str(c) + " " for c in constants]
+            # v = [str(c) + " " for c in permutation]
 
-            p = dict(zip(k, v))
+            # p = dict(zip(k, v))
 
-            line = self.multiple_replace(line, p)
+            # line = self.multiple_replace(line, p)
 
-        # Tokenize the line
+            # A more efficient way for our dataset, I guess
+            line = " ".join([str(permutation[int(tok)]) if tok.isdigit() else tok for tok in line.split()])
+
+        line = line.replace("- ", "-")  # Remove spaces after negation symbols for new tokenizer
+        # print(line)
+        # Tokenize the line for training, pad with pad tokens
         tokens = self.tokenizer(line, truncation=True, padding='max_length', max_length=self.block_size, return_tensors="pt")
+        pad_token_id = self.tokenizer.pad_token_id
 
         # Extract input_ids, attention mask as a tensor
         input_ids = tokens["input_ids"].squeeze()
@@ -80,6 +90,12 @@ class SATDataset(Dataset):
 
         # Create a label that's the input sequence shifted left by one
         labels = torch.cat((input_ids[1:], torch.tensor([self.tokenizer.pad_token_id])))
+        labels[labels == pad_token_id] = -100  # CrossEntropyLoss ignores index -100
+
+        if self.mask_formula:
+            # Make all labels before the first [SEP] token -100
+            sep_token_id = self.tokenizer.encode("[SEP]")[0]
+            labels[:torch.nonzero(input_ids == sep_token_id)[0][0]] = -100
 
         if self.shift_within_block:
             # first get length of unmasked input and determine how much left
@@ -88,24 +104,25 @@ class SATDataset(Dataset):
             size_left_pad = torch.randint(high=(block_size - input_len), size=(1,)).item()
 
             input_ids = self.left_pad(input_ids, size_left_pad, self.tokenizer.pad_token_id, block_size)
-            labels = self.left_pad(labels, size_left_pad, self.tokenizer.pad_token_id, block_size)
+            labels = self.left_pad(labels, size_left_pad, -100, block_size)
             attention_mask = self.left_pad(attention_mask, size_left_pad, 0, block_size)
         
+        
         # Return a dictionary with input_ids and labels
-        return {"input_ids": input_ids, "labels": labels, "attention_mask": attention_mask}
+        return {"input_ids": input_ids.long(), "labels": labels.long(), "attention_mask": attention_mask}
 
 
 if __name__ == "__main__":
     # Test the dataset
     max_id = 30
-    custom_tokens = [str(i) for i in range(max_id + 1)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]"]
-
+    # custom_tokens = [str(i) for i in range(max_id + 1)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]"]
+    custom_tokens = [str(i) for i in range(max_id + 1)] + [str(-i) for i in range(1, max_id + 1)] + ["[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
     tokenizer = CustomTokenizer(custom_tokens)
     tokenizer.add_special_tokens({'pad_token': '[EOS]'})
 
     block_size = 800
 
-    DATASET_PATH = "./datasets/SAT_6_10/train.txt"
+    DATASET_PATH = "./datasets/SAT_11_15_Marginal/train.txt"
     dataset = SATDataset(
         DATASET_PATH, 
         tokenizer, 
@@ -113,9 +130,11 @@ if __name__ == "__main__":
         max_id,
         remove_trace=False,
         shift_within_block=True,
-        permute_constants=True)
+        permute_constants=True,
+        mask_formula=True)
     
     # i = torch.randint(0, len(dataset), (1,)).item()
     i = 0
     test_item = dataset.__getitem__(i)
     print(f"Example item, index {i}: \n{test_item}")
+    print(f"Lengths of input_ids, labels, attention_mask: {test_item['input_ids'].shape}, {test_item['labels'].shape}, {test_item['attention_mask'].shape}")

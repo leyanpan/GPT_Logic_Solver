@@ -11,14 +11,26 @@ from sklearn.metrics import (f1_score,
 
 ### Parameters ###
 max_gen_len = 600
+max_id = 30
 temperature = 0.01  
 batch_size = 5
 dataset = '/home/drdata/llm/models/HF_SAT/datasets/SAT_6_10'
 file_name = 'test.txt'
 model_dir = '/home/drdata/llm/models/HF_SAT/models/sat-gpt-20240130-141141'
+old_tokenizer = False
 ##################
 
+
 exec(open('configurator.py').read())
+
+if old_tokenizer:
+    custom_tokens = [str(i) for i in range(max_id + 1)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]"]
+else:
+    custom_tokens = [str(i) for i in range(max_id + 1)] + [str(-i) for i in range(1, max_id + 1)] + ["[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
+
+print("Token Set:", custom_tokens)
+tokenizer = CustomTokenizer(custom_tokens)
+tokenizer.add_special_tokens({'pad_token': '[EOS]'})
 
 input_file = os.path.join(dataset, file_name)
 
@@ -33,8 +45,6 @@ def line_sat(line, sep=' '):
     return None
 
 def load_model_and_tokenizer(model_dir):
-    custom_tokens = [str(i) for i in range(31)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
-    tokenizer = CustomTokenizer.from_pretrained(model_dir, vocab_list=custom_tokens)
     tokenizer.pad_token = "[EOS]"
     model = GPT2LMHeadModel.from_pretrained(model_dir)
     return model, tokenizer
@@ -44,7 +54,10 @@ def batch_generate_completions(input_file, model, tokenizer, batch_size, max_len
     true_labels = []
     pred_labels = []
     with open(input_file, 'r') as file:
-        lines = [line.strip().replace("-", "- ") for line in file.readlines()]
+        if old_tokenizer:
+            lines = [line.strip().replace("-", "- ") for line in file.readlines()]
+        else:
+            lines = [line.strip() for line in file.readlines()]
     
     for i in range(0, len(lines), batch_size):
         batch_lines = lines[i:i+batch_size]

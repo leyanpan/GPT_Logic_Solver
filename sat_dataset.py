@@ -89,7 +89,8 @@ class SATDataset(Dataset):
         attention_mask = tokens["attention_mask"].squeeze()
 
         # Create a label that's the input sequence shifted left by one
-        labels = torch.cat((input_ids[1:], torch.tensor([self.tokenizer.pad_token_id])))
+        # labels = torch.cat((input_ids[1:], torch.tensor([self.tokenizer.pad_token_id])))
+        labels = input_ids.clone()
         labels[labels == pad_token_id] = -100  # CrossEntropyLoss ignores index -100
 
         if self.mask_formula:

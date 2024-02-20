@@ -1,5 +1,6 @@
 import re
 import random
+from typing import Tuple
 import torch
 
 from torch.utils.data import Dataset
@@ -22,6 +23,14 @@ class CustomTokenizer(PreTrainedTokenizer):
 
     def tokenize(self, text):
         return text.split()
+
+    def save_vocabulary(self, save_directory: str, filename_prefix: str | None = None) -> Tuple[str]:
+        vocab_file = (filename_prefix + "-" if filename_prefix else "") + "vocab.txt"
+        with open(vocab_file, "w", encoding="utf-8") as writer:
+            for token in self.vocab.keys():
+                writer.write(token + "\n")
+        return (vocab_file,)
+    
 
 # Custom dataset class
 class SATDataset(Dataset):

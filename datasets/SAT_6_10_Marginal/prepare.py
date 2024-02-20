@@ -7,8 +7,8 @@ cur_path = os.path.dirname(os.path.realpath(__file__))
 train_file_path = os.path.join(cur_path, "train.txt")
 test_file_path = os.path.join(cur_path, "test.txt")
 
-train_data_url = "https://huggingface.co/datasets/leyanpan/sat-solver/resolve/main/SAT_N6_10_Clause_Trace.txt?download=true"
-test_data_url = "https://huggingface.co/datasets/leyanpan/sat-solver/resolve/main/SAT_N6_10_Test_Clause_Trace.txt?download=true"
+train_data_url = "https://huggingface.co/datasets/leyanpan/sat-solver/resolve/main/SAT_6_10_marginal.txt?download=true"
+test_data_url = "https://huggingface.co/datasets/leyanpan/sat-solver/resolve/main/SAT_6_10_marginal_Test.txt?download=true"
 
 
 if not os.path.exists(train_file_path):

@@ -17,5 +17,6 @@ models/
 
 model_ckpts/
 wandb/
+preds/
 train.txt
 test.txt

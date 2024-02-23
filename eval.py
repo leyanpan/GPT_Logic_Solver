@@ -11,10 +11,10 @@ from sklearn.metrics import (f1_score,
 
 
 ### Parameters ###
-max_gen_len = 1000
+max_gen_len = 850
 max_id = 30
 temperature = 0.01  
-batch_size = 24
+batch_size = 16
 dataset = None
 file_name = 'test.txt'
 model_dir = None
@@ -130,6 +130,9 @@ def batch_generate_completions(input_file, model, tokenizer, batch_size, max_len
                                      generation_config=gen_config,
                                      stopping_criteria=stop_criteria)
         
+        if debug:
+            print(type(outputs))
+        
         for output in outputs:
             completion = tokenizer.decode(output, skip_special_tokens=True)
             completion = completion[:completion.find("SAT") + len("SAT") if "SAT" in completion else -1]
@@ -141,6 +144,10 @@ def batch_generate_completions(input_file, model, tokenizer, batch_size, max_len
     return completions, true_labels, pred_labels
 
 model, tokenizer = load_model_and_tokenizer(model_dir)
+
+if debug:
+    print(model)
+    print(tokenizer.vocab)
 
 if torch.cuda.is_available() and use_cuda:
     model.to("cuda")
@@ -157,8 +164,8 @@ completions, true_labels, pred_labels = batch_generate_completions(input_file,
                                                                    stop_criteria=stop_criteria)
 
 # Output the completions
-for completion in completions:
-    print(completion)
+# for completion in completions:
+#     print(completion)
 
 with open(out_file, 'w') as file:
     for completion in completions:

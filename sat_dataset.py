@@ -2,6 +2,7 @@ import re
 import random
 from typing import Tuple
 import torch
+import os
 
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer
@@ -25,7 +26,7 @@ class CustomTokenizer(PreTrainedTokenizer):
         return text.split()
 
     def save_vocabulary(self, save_directory: str, filename_prefix: str | None = None) -> Tuple[str]:
-        vocab_file = (filename_prefix + "-" if filename_prefix else "") + "vocab.txt"
+        vocab_file = os.path.join(save_directory, (filename_prefix + "-" if filename_prefix else "") + "vocab.txt")
         with open(vocab_file, "w", encoding="utf-8") as writer:
             for token in self.vocab.keys():
                 writer.write(token + "\n")
@@ -34,13 +35,14 @@ class CustomTokenizer(PreTrainedTokenizer):
 
 # Custom dataset class
 class SATDataset(Dataset):
-    def __init__(self, file_path, tokenizer, block_size, max_id, remove_trace=False, shift_within_block=False, permute_constants=False, mask_formula=False):
+    def __init__(self, file_path, tokenizer, block_size, max_id, remove_trace=False, shift_within_block=False, permute_constants=False, mask_formula=False, old_tokenizer=False):
         self.tokenizer = tokenizer
         self.max_id = max_id
         self.block_size = block_size
         self.shift_within_block = shift_within_block
         self.permute_constants = permute_constants
         self.mask_formula = mask_formula
+        self.old_tokenizer = old_tokenizer
         self.examples = []
 
         with open(file_path, 'r') as f:
@@ -86,8 +88,8 @@ class SATDataset(Dataset):
 
             # A more efficient way for our dataset, I guess
             line = " ".join([str(permutation[int(tok)]) if tok.isdigit() else tok for tok in line.split()])
-
-        line = line.replace("- ", "-")  # Remove spaces after negation symbols for new tokenizer
+        if not self.old_tokenizer:
+            line = line.replace("- ", "-")  # Remove spaces after negation symbols for new tokenizer
         # print(line)
         # Tokenize the line for training, pad with pad tokens
         tokens = self.tokenizer(line, truncation=True, padding='max_length', max_length=self.block_size, return_tensors="pt")

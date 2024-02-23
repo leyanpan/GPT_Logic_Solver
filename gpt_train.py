@@ -36,6 +36,7 @@ n_embd = 768
 n_head = 12
 rand_pos = True
 perm_vars = True
+old_tokenizer = False
 mask_formula = True
 ##################
 
@@ -51,9 +52,10 @@ if dataset is None:
 if append_timestamp:
     out_dir += f"-{time.strftime('%Y%m%d-%H%M%S')}"
 
-
-# custom_tokens = [str(i) for i in range(max_id + 1)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
-custom_tokens = [str(i) for i in range(max_id + 1)] + [str(-i) for i in range(1, max_id + 1)] + ["[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
+if old_tokenizer:
+    custom_tokens = [str(i) for i in range(max_id + 1)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]"]
+else:
+    custom_tokens = [str(i) for i in range(max_id + 1)] + [str(-i) for i in range(1, max_id + 1)] + ["[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
 
 print("Token Set:", custom_tokens)
 
@@ -84,7 +86,8 @@ dataset = SATDataset(file_path=dataset_path,
                      remove_trace=remove_trace, 
                      shift_within_block=rand_pos, 
                      permute_constants=perm_vars,
-                     mask_formula=mask_formula)
+                     mask_formula=mask_formula,
+                     old_tokenizer=old_tokenizer)
 
 
 # Split the dataset into training and validation sets

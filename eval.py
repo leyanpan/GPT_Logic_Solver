@@ -38,7 +38,7 @@ if out_file is None:
     out_file = os.path.join('preds', f"{os.path.basename(model_dir)}-{os.path.basename(dataset)}.txt")
 
 if old_tokenizer:
-    custom_tokens = [str(i) for i in range(max_id + 1)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]"]
+    custom_tokens = [str(i) for i in range(max_id + 1)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
 else:
     custom_tokens = [str(i) for i in range(max_id + 1)] + [str(-i) for i in range(1, max_id + 1)] + ["[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
 
@@ -92,7 +92,7 @@ def batch_generate_completions(input_file, model, tokenizer, batch_size, max_len
             lines = [line.strip().replace("-", "- ") for line in file.readlines()]
         else:
             lines = [line.strip() for line in file.readlines()]
-    gen_config = GenerationConfig(max_new_tokens=max_length,
+    gen_config = GenerationConfig(max_length=min(max_gen_len, model.config.n_positions),
                                   num_return_sequences=1)
 
     gen_config.pad_token_id = tokenizer.pad_token_id
@@ -130,8 +130,6 @@ def batch_generate_completions(input_file, model, tokenizer, batch_size, max_len
                                      generation_config=gen_config,
                                      stopping_criteria=stop_criteria)
         
-        if debug:
-            print(type(outputs))
         
         for output in outputs:
             completion = tokenizer.decode(output, skip_special_tokens=True)

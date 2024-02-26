@@ -1,6 +1,6 @@
 import re
 import random
-from typing import Tuple
+from typing import Dict, Tuple
 import torch
 import os
 
@@ -11,10 +11,10 @@ import numpy as np
 # Custom tokenizer with a placeholder list of tokens
 class CustomTokenizer(PreTrainedTokenizer):
     def __init__(self, vocab_list, **kwargs):
-        super().__init__(**kwargs)
         self.unk_token = "[UNK]"
         self.vocab = {v: k for k, v in enumerate(vocab_list)}
         self.ids_to_tokens = {k: v for v, k in self.vocab.items()}
+        super().__init__(**kwargs)
 
     def _convert_token_to_id(self, token):
         return self.vocab.get(token)
@@ -31,6 +31,12 @@ class CustomTokenizer(PreTrainedTokenizer):
             for token in self.vocab.keys():
                 writer.write(token + "\n")
         return (vocab_file,)
+    
+    def get_vocab(self):
+        return self.vocab
+    
+    def get_vocab_size(self):
+        return len(self.vocab)
     
 
 # Custom dataset class

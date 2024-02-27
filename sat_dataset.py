@@ -38,6 +38,13 @@ class CustomTokenizer(PreTrainedTokenizer):
     def get_vocab_size(self):
         return len(self.vocab)
     
+    @property
+    def vocab_size(self) -> int:
+        """
+        `int`: Size of the base vocabulary (without the added tokens).
+        """
+        return len(self.vocab)
+    
 
 # Custom dataset class
 class SATDataset(Dataset):

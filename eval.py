@@ -20,7 +20,7 @@ file_name = 'test.txt'
 model_dir = None
 out_file = None
 use_cuda = True
-stop_crit = True
+stop_crit = False
 old_tokenizer = False
 debug = False
 ##################

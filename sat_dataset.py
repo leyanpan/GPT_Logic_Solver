@@ -162,4 +162,9 @@ if __name__ == "__main__":
     i = 0
     test_item = dataset.__getitem__(i)
     print(f"Example item, index {i}: \n{test_item}")
+    print(f"Decoded input_ids: {tokenizer.decode(test_item['input_ids'])}")
+    print(f"Equal positions: {test_item['input_ids'] == test_item['labels']}")
+    label = test_item['labels']
+    label[label == -100] = tokenizer.pad_token_id
+    print(f"Decoded labels: {tokenizer.decode(test_item['labels'])}")
     print(f"Lengths of input_ids, labels, attention_mask: {test_item['input_ids'].shape}, {test_item['labels'].shape}, {test_item['attention_mask'].shape}")

@@ -19,6 +19,7 @@ from sat_trainer import SATHFTrainer
 from utils import get_dataset_path, debug_log
 import utils
 import time
+import os
 
 ### Parameters ###
 epochs = 20
@@ -36,11 +37,13 @@ n_embd = 768
 n_head = 12
 rand_pos = True
 perm_vars = True
+load_model = None
 old_tokenizer = False
 mask_formula = True
 ##################
 
 exec(open('configurator.py').read())
+
 utils.debug = debug
 if debug:
     use_wandb = False
@@ -53,9 +56,9 @@ if append_timestamp:
     out_dir += f"-{time.strftime('%Y%m%d-%H%M%S')}"
 
 if old_tokenizer:
-    custom_tokens = [str(i) for i in range(max_id + 1)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
+    custom_tokens = [str(i) for i in range(30 + 1)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
 else:
-    custom_tokens = [str(i) for i in range(max_id + 1)] + [str(-i) for i in range(1, max_id + 1)] + ["[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
+    custom_tokens = [str(i) for i in range(30 + 1)] + [str(-i) for i in range(1, 30 + 1)] + ["[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
 
 print("Token Set:", custom_tokens)
 
@@ -76,6 +79,9 @@ config = GPT2Config(vocab_size=len(tokenizer.vocab),
 
 # Initialize GPT-2 model
 model = GPT2LMHeadModel(config)
+
+if load_model is not None:
+    model = GPT2LMHeadModel.from_pretrained(load_model)
 
 # Load dataset
 dataset_path = get_dataset_path(dataset)
@@ -109,6 +115,7 @@ training_args = TrainingArguments(
     metric_for_best_model="loss",
     greater_is_better=False,
     report_to="wandb" if use_wandb else "none",
+    run_name=os.path.basename(out_dir)
 )
 
 # Initialize Trainer with train and validation datasets

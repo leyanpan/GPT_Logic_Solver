@@ -48,7 +48,7 @@ class CustomTokenizer(PreTrainedTokenizer):
 
 # Custom dataset class
 class SATDataset(Dataset):
-    def __init__(self, file_path, tokenizer, block_size, max_id, remove_trace=False, shift_within_block=False, permute_constants=False, mask_formula=False, old_tokenizer=False):
+    def __init__(self, file_path, tokenizer, block_size, max_id, remove_trace=False, shift_within_block=False, permute_constants=False, mask_formula=False, old_tokenizer=False, truncate_option=None):
         self.tokenizer = tokenizer
         self.max_id = max_id
         self.block_size = block_size
@@ -56,8 +56,11 @@ class SATDataset(Dataset):
         self.permute_constants = permute_constants
         self.mask_formula = mask_formula
         self.old_tokenizer = old_tokenizer
-        self.examples = []
+        self.truncate_option = truncate_option
 
+        assert truncate_option in [None, "at_SEP", "after_SEP"], "Invalid truncate_option. Must be one of [None, 'at_SEP', 'after_SEP']" 
+        
+        self.examples = []
         with open(file_path, 'r') as f:
             for line in f:
                 line = line.strip().replace("-", "- ")
@@ -82,6 +85,13 @@ class SATDataset(Dataset):
 
     def __getitem__(self, i):
         line = self.examples[i]
+
+        if self.truncate_option == "at_SEP":
+            line = line[:line.find("[SEP]") + len("[SEP]")]
+
+        if self.truncate_option == "after_SEP":
+            raise NotImplementedError("Truncate option 'after_SEP' not implemented yet")
+
         block_size = self.block_size
 
         if self.permute_constants:
@@ -92,18 +102,11 @@ class SATDataset(Dataset):
             permutation = random.sample(constants, len(constants))
             permutation = [0] + permutation  # 0 is a special token
 
-            # k = [str(c) + " " for c in constants]
-            # v = [str(c) + " " for c in permutation]
-
-            # p = dict(zip(k, v))
-
-            # line = self.multiple_replace(line, p)
-
-            # A more efficient way for our dataset, I guess
             line = " ".join([str(permutation[int(tok)]) if tok.isdigit() else tok for tok in line.split()])
+
         if not self.old_tokenizer:
             line = line.replace("- ", "-")  # Remove spaces after negation symbols for new tokenizer
-        # print(line)
+
         # Tokenize the line for training, pad with pad tokens
         tokens = self.tokenizer(line, truncation=True, padding='max_length', max_length=self.block_size, return_tensors="pt")
         pad_token_id = self.tokenizer.pad_token_id
@@ -140,23 +143,28 @@ class SATDataset(Dataset):
 if __name__ == "__main__":
     # Test the dataset
     max_id = 30
-    # custom_tokens = [str(i) for i in range(max_id + 1)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]"]
-    custom_tokens = [str(i) for i in range(max_id + 1)] + [str(-i) for i in range(1, max_id + 1)] + ["[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
+    custom_tokens = [str(i) for i in range(max_id + 1)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]"]
+
+    # custom_tokens = [str(i) for i in range(max_id + 1)] + [str(-i) for i in range(1, max_id + 1)] + ["[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
+
     tokenizer = CustomTokenizer(custom_tokens)
     tokenizer.add_special_tokens({'pad_token': '[EOS]'})
 
     block_size = 800
 
-    DATASET_PATH = "./datasets/SAT_11_15_Marginal/train.txt"
+    DATASET_PATH = "./datasets/SAT_6_10_Marginal_Old/train.txt"
     dataset = SATDataset(
         DATASET_PATH, 
         tokenizer, 
         block_size, 
         max_id,
         remove_trace=False,
-        shift_within_block=True,
-        permute_constants=True,
-        mask_formula=True)
+        shift_within_block=False,
+        permute_constants=False,
+        mask_formula=False,
+        old_tokenizer=True,
+        truncate_option="at_SEP"
+    )
     
     # i = torch.randint(0, len(dataset), (1,)).item()
     i = 0

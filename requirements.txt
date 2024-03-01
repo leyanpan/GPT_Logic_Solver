@@ -1,4 +1,4 @@
-torch
+torch==2.1.2
 numpy
 transformers==4.30.2
 accelerate>=0.20.1
@@ -6,3 +6,5 @@ datasets
 tiktoken
 wandb
 tqdm
+trl
+python-sat[aiger,approxmc,cryptosat,pblib]

@@ -81,6 +81,8 @@ def line_sat(line, sep=' '):
 def load_model_and_tokenizer(model_dir):
     tokenizer = CustomTokenizer(custom_tokens, padding_side="left")
     tokenizer.add_special_tokens({'pad_token': '[EOS]'})
+    tokenizer.add_special_tokens({'eos_token': '[EOS]'})
+
     model = AutoModelForCausalLMWithValueHead.from_pretrained(model_dir)
     return model, tokenizer
 
@@ -100,15 +102,23 @@ class SATStoppingCriteria(StoppingCriteria):
 # helper functions for different rewards (consider building classes in a seperate module) for online / oracle
 def simple_offline_outcome_supervised_reward(responses, expected):
     # this might be inneficient?
-    rewards = []
+    matches = []
+    L_cots = []
 
     for response, expected_outcome in zip(responses, expected):
         match = (line_sat(response) == line_sat(expected_outcome)) * 1
         L_cot = len(response)
 
-        rewards.append(match * math.exp(-length_penalty * L_cot))
+        matches.append(match)
+        L_cots.append(L_cot)
 
-    return rewards
+    m = torch.tensor(matches)
+    L_c = torch.tensor(L_cots)
+
+    rewards = m * torch.exp(-length_penalty * L_c)
+
+    # ppo_trainer wants a list of tensors, ffs
+    return [reward for reward in rewards]
 
 # Load the model
 model, tokenizer = load_model_and_tokenizer(model_dir)
@@ -135,7 +145,7 @@ gen_config = GenerationConfig(
 )
 
 gen_config.pad_token_id = tokenizer.pad_token_id
-gen_config.eos_token_id = tokenizer.pad_token_id
+gen_config.eos_token_id = tokenizer.eos_token_id
 
 generation_kwargs = {
     "generation_config": gen_config,
@@ -166,39 +176,19 @@ ppo_trainer = PPOTrainer(
 for epoch in tqdm(range(ppo_trainer.config.ppo_epochs), "epoch: "):
     for batch in tqdm(ppo_trainer.dataloader):
         queries = batch["query"]
-        # query_tensors = tokenizer.batch_encode_plus(
-        #     queries, 
-        #     return_tensors="pt", 
-        #     padding="max_length",
-        #     max_length=block_size,
-        #     truncation=True,
-        # )["input_ids"]
 
-        # This is where it's broken -- I don't know what 
-        # ppo_trainer.generate wants.  I give it a batch x max_len 
-        # tensor, it says it wants a list.  I give it a list, it
-        # says it can't create a tensor.  
-        # query_tensors = [
-        #     tokenizer.encode(
-        #         query,
-        #         truncation=True,
-        #         padding="max_length",
-        #         max_length=block_size,
-        #         return_tensors="pt",
-        #     ) for query in queries
-        # ]
+        query_batch = tokenizer.batch_encode_plus(
+            queries, 
+            return_tensors="pt", 
+            padding=True,
+            truncation=True,
+        )["input_ids"]
+
+        # It wants it as a list of tensors, ffs
+        query_tensors = [query for query in query_batch]
 
         #### Get response 
-        # This is going to be slow, since it's not batched,
-        # but ppo_trainer.generate has some weird expectations
-        # (read the code) -- nope, this doesn't work either
-        response_tensors = [
-            ppo_trainer.generate(
-                tokenizer.encode(query, return_tensors="pt"),
-                **generation_kwargs
-            ) for query in queries
-        ]
-
+        response_tensors = ppo_trainer.generate(query_tensors, **generation_kwargs)
         batch["response"] = [tokenizer.decode(r.squeeze()) for r in response_tensors]
     
         #### Compute reward score

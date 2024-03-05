@@ -164,6 +164,9 @@ if __name__ == "__main__":
 
     tokenizer = CustomTokenizer(custom_tokens)
     tokenizer.add_special_tokens({'pad_token': '[EOS]'})
+    tokenizer.add_special_tokens({'eos_token': '[EOS]'})
+
+    print(tokenizer.eos_token_id)
 
     block_size = 800
 

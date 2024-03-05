@@ -1,13 +1,16 @@
 # `conda env update --file environment.yml --prune`
-
 name: HF_SAT
 channels:
+  - pytorch
+  - conda-forge
+  - nvidia
   - defaults
 dependencies:
-  - python=3.10
-  - ipykernel
-  - jupyter
-  - black
+  - python=3.11
   - pip
+  - pytorch=2.2.1
+  - pytorch-cuda=12.1
+  - wandb=0.16.3
+  - scikit-learn=1.4.1
   - pip:
-    - -r requirements.txt
+    - transformers[torch]===4.38.1

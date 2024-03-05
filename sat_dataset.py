@@ -10,11 +10,20 @@ import numpy as np
 
 # Custom tokenizer with a placeholder list of tokens
 class CustomTokenizer(PreTrainedTokenizer):
-    def __init__(self, vocab_list, **kwargs):
+    def __init__(self, vocab_list: list, **kwargs):
         self.unk_token = "[UNK]"
         self.vocab = {v: k for k, v in enumerate(vocab_list)}
         self.ids_to_tokens = {k: v for v, k in self.vocab.items()}
         super().__init__(**kwargs)
+
+    @classmethod
+    def from_pretrained(cls, dir):
+        filename = os.path.join(dir, "vocab.txt")
+        vocab_list = []
+        with open(filename, "r", encoding="utf-8") as reader:
+            for line in reader:
+                vocab_list.append(line.strip())
+        return cls(vocab_list)
 
     def _convert_token_to_id(self, token):
         return self.vocab.get(token)

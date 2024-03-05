@@ -48,7 +48,7 @@ class CustomTokenizer(PreTrainedTokenizer):
 
 # Custom dataset class
 class SATDataset(Dataset):
-    def __init__(self, file_path, tokenizer, block_size, max_id, remove_trace=False, shift_within_block=False, permute_constants=False, mask_formula=False, old_tokenizer=False, truncate_option=None):
+    def __init__(self, file_path, tokenizer, block_size, max_id, remove_trace=False, shift_within_block=False, permute_constants=False, mask_formula=False, old_tokenizer=False):
         self.tokenizer = tokenizer
         self.max_id = max_id
         self.block_size = block_size
@@ -56,9 +56,6 @@ class SATDataset(Dataset):
         self.permute_constants = permute_constants
         self.mask_formula = mask_formula
         self.old_tokenizer = old_tokenizer
-        self.truncate_option = truncate_option
-
-        assert truncate_option in [None, "at_SEP", "after_SEP"], "Invalid truncate_option. Must be one of [None, 'at_SEP', 'after_SEP']" 
         
         self.examples = []
         with open(file_path, 'r') as f:
@@ -82,15 +79,16 @@ class SATDataset(Dataset):
         # note that iterating over the map causes substrings replaced earler to be replaced again; hence the need for this function
         pattern = re.compile("|".join([re.escape(k) for k in sorted(rep_dict,key=len,reverse=True)]), flags=re.DOTALL)
         return pattern.sub(lambda x: rep_dict[x.group(0)], string)
+    
+    def constant_permuter(self, line):
+        constants = list(range(1, self.max_id + 1))
+        permutation = random.sample(constants, len(constants))
+        permutation = [0] + permutation  # 0 is a special token
+
+        return " ".join([str(permutation[int(tok)]) if tok.isdigit() else tok for tok in line.split()])
 
     def __getitem__(self, i):
         line = self.examples[i]
-
-        if self.truncate_option == "at_SEP":
-            line = line[:line.find("[SEP]") + len("[SEP]")]
-
-        if self.truncate_option == "after_SEP":
-            raise NotImplementedError("Truncate option 'after_SEP' not implemented yet")
 
         block_size = self.block_size
 
@@ -98,17 +96,13 @@ class SATDataset(Dataset):
             # If this option is invoked, come up with a random permutation of
             # the constants in the CNF formula and replace them in the line
             # for this SAT problem only
-            constants = list(range(1, self.max_id + 1))
-            permutation = random.sample(constants, len(constants))
-            permutation = [0] + permutation  # 0 is a special token
-
-            line = " ".join([str(permutation[int(tok)]) if tok.isdigit() else tok for tok in line.split()])
+            line = self.constant_permuter(line)
 
         if not self.old_tokenizer:
             line = line.replace("- ", "-")  # Remove spaces after negation symbols for new tokenizer
 
         # Tokenize the line for training, pad with pad tokens
-        tokens = self.tokenizer(line, truncation=True, padding='max_length', max_length=self.block_size, return_tensors="pt")
+        tokens = self.tokenizer(line, truncation=True, padding="max_length", max_length=self.block_size, return_tensors="pt")
         pad_token_id = self.tokenizer.pad_token_id
 
         # Extract input_ids, attention mask as a tensor
@@ -138,6 +132,27 @@ class SATDataset(Dataset):
         
         # Return a dictionary with input_ids and labels
         return {"input_ids": input_ids.long(), "labels": labels.long(), "attention_mask": attention_mask}
+    
+class SATDatasetForRL(SATDataset):
+    def __getitem__(self, i):
+        line = self.examples[i]
+
+        block_size = self.block_size
+
+        if self.permute_constants:
+            # If this option is invoked, come up with a random permutation of
+            # the constants in the CNF formula and replace them in the line
+            # for this SAT problem only
+            line = self.constant_permuter(line)
+
+        if not self.old_tokenizer:
+            line = line.replace("- ", "-")
+        
+        split = line.find("[SEP]") + len("[SEP]")
+        query = line[:split]
+        response = line[(split + 1):]
+
+        return {"query": query, "expected_response": response}
 
 
 if __name__ == "__main__":
@@ -153,26 +168,20 @@ if __name__ == "__main__":
     block_size = 800
 
     DATASET_PATH = "./datasets/SAT_6_10_Marginal_Old/train.txt"
-    dataset = SATDataset(
+    dataset = SATDatasetForRL(
         DATASET_PATH, 
         tokenizer, 
         block_size, 
         max_id,
-        remove_trace=False,
-        shift_within_block=False,
-        permute_constants=False,
-        mask_formula=False,
         old_tokenizer=True,
-        truncate_option="at_SEP"
+        permute_constants=True
     )
     
     # i = torch.randint(0, len(dataset), (1,)).item()
     i = 0
     test_item = dataset.__getitem__(i)
-    print(f"Example item, index {i}: \n{test_item}")
-    print(f"Decoded input_ids: {tokenizer.decode(test_item['input_ids'])}")
-    print(f"Equal positions: {test_item['input_ids'] == test_item['labels']}")
-    label = test_item['labels']
-    label[label == -100] = tokenizer.pad_token_id
-    print(f"Decoded labels: {tokenizer.decode(test_item['labels'])}")
-    print(f"Lengths of input_ids, labels, attention_mask: {test_item['input_ids'].shape}, {test_item['labels'].shape}, {test_item['attention_mask'].shape}")
+
+    print(test_item)
+    print(tokenizer.encode(test_item["query"], return_tensors="pt"))
+
+    print(enumerate)

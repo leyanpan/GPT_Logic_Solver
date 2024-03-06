@@ -20,3 +20,5 @@ wandb/
 preds/
 train.txt
 test.txt
+
+environment-dev.yml

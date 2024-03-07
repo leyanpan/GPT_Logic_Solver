@@ -16,7 +16,7 @@ from torch.optim import AdamW
 
 from sat_dataset import SATDataset, CustomTokenizer
 from sat_trainer import SATHFTrainer
-from utils import get_dataset_path, debug_log
+from utils import get_dataset_path
 import utils
 import time
 import os

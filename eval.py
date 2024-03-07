@@ -3,96 +3,23 @@ from transformers import GPT2LMHeadModel, StoppingCriteria, StoppingCriteriaList
 import os
 from sat_dataset import CustomTokenizer
 import tqdm
-import utils  
+from utils import line_sat, load_model_and_tokenizer, SATStoppingCriteria, is_old_tokenizer, load_conf_file
 from sklearn.metrics import (f1_score, 
                              accuracy_score, 
                              precision_score, 
                              recall_score)
 
-
-### Parameters ###
-max_gen_len = 850
-max_id = 30
-temperature = 0.01  
-batch_size = 16
-dataset = None
-file_name = 'test.txt'
-model_dir = None
-out_file = None
-use_cuda = True
-stop_crit = False
-old_tokenizer = False
-debug = False
-##################
-
-
-exec(open('configurator.py').read())
-
-if dataset is None:
-    raise ValueError("Please specify a dataset by setting the 'dataset' variable in the config file or using --dataset=[DATASET PATH].")
-
-if model_dir is None:
-    raise ValueError("Please specify a model directory by setting the 'model_dir' variable in the config file or using --model_dir=[MODEL DIRECTORY].")
-
-if out_file is None:
-    out_file = os.path.join('preds', f"{os.path.basename(model_dir)}-{os.path.basename(dataset)}.txt")
-
-if old_tokenizer:
-    custom_tokens = [str(i) for i in range(max_id + 1)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
-else:
-    custom_tokens = [str(i) for i in range(max_id + 1)] + [str(-i) for i in range(1, max_id + 1)] + ["[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
-
-class SATStoppingCriteria(StoppingCriteria):
-    def __init__(self, tokenizer, stop_tokens=['SAT', 'UNSAT', '[EOS]']):
-        self.stops = [tokenizer.encode(token)[0] for token in stop_tokens]
-        super().__init__()
-
-    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor):
-        for row in input_ids:
-            if not any(stop_id in row for stop_id in self.stops):
-                # If any row does not contain a stop token, continue generation
-                return False
-        # If all rows contain at least one stop token, stop generation
-        return True
-
-print("Token Set:", custom_tokens)
-
-input_file = os.path.join(dataset, file_name)
-
-# if not os.path.exists(input_file):
-#     # run prepare.py in the dataset directory
-#     print("Dataset file not found. Running prepare.py in the dataset directory.")
-#     cur_dir = os.getcwd()
-#     os.chdir(dataset)
-#     exec(open('prepare.py').read())
-#     os.chdir(cur_dir)
-
-torch.manual_seed(0)
-torch.cuda.manual_seed(0)
-
-def line_sat(line, sep=' '):
-    if sep + 'UNSAT' in line:
-        return False
-    elif sep + 'SAT' in line:
-        return True
-    return None
-
-def load_model_and_tokenizer(model_dir):
-    tokenizer = CustomTokenizer(custom_tokens, padding_side="left")
-    tokenizer.add_special_tokens({'pad_token': '[EOS]'})
-    model = GPT2LMHeadModel.from_pretrained(model_dir)
-    return model, tokenizer
-
-def batch_generate_completions(input_file, model, tokenizer, batch_size, max_length, stop_criteria=None):
+def batch_generate_completions(input_file, model, tokenizer, batch_size, max_length, stop_criteria=None, debug=False):
     completions = []
     true_labels = []
     pred_labels = []
+    old_tokenizer = is_old_tokenizer(tokenizer)
     with open(input_file, 'r') as file:
         if old_tokenizer:
             lines = [line.strip().replace("-", "- ") for line in file.readlines()]
         else:
             lines = [line.strip() for line in file.readlines()]
-    gen_config = GenerationConfig(max_length=min(max_gen_len, model.config.n_positions),
+    gen_config = GenerationConfig(max_length=min(max_length, model.config.n_positions),
                                   num_return_sequences=1)
 
     gen_config.pad_token_id = tokenizer.pad_token_id
@@ -115,10 +42,9 @@ def batch_generate_completions(input_file, model, tokenizer, batch_size, max_len
         input_ids = tokenized_outputs["input_ids"]
         attention_mask = tokenized_outputs.get("attention_mask") 
 
-        if use_cuda:
-            input_ids = input_ids.to("cuda")
-            if attention_mask is not None:
-                attention_mask = attention_mask.to("cuda")
+        input_ids = input_ids.to(model.device)
+        if attention_mask is not None:
+            attention_mask = attention_mask.to(model.device)
         # Generate outputs
         if attention_mask is not None:
             outputs = model.generate(input_ids=input_ids, 
@@ -141,46 +67,73 @@ def batch_generate_completions(input_file, model, tokenizer, batch_size, max_len
 
     return completions, true_labels, pred_labels
 
-model, tokenizer = load_model_and_tokenizer(model_dir)
 
-if debug:
-    print(model)
-    print(tokenizer.vocab)
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Evaluate a GPT model on a SAT dataset.")
+    parser.add_argument("model_dir", type=str, default=None, help="The path to the model directory.")
+    parser.add_argument("dataset", type=str, default=None, help="The path to the dataset.")
+    parser.add_argument("-c", "--config", type=str, default=None, help="The path to the config file.")
+    parser.add_argument("-l", "--max_len", type=int, default=850, help="The maximum length of the generated completions.")
+    parser.add_argument("-i", "--max_id", type=int, default=30, help="The maximum variable ID in the dataset.")
+    parser.add_argument("-b", "--batch_size", type=int, default=16, help="The batch size to use during generation.")
+    parser.add_argument("-f", "--file_name", type=str, default='test.txt', help="The name of the file in the dataset to evaluate on.")
+    parser.add_argument("-o", "--out_file", type=str, default=None, help="The path to the output file to output all generated completions.")
+    parser.add_argument("--cpu", action="store_true", help="Use CUDA for generation.")
+    parser.add_argument("--stop_crit", action="store_true", help="Use stopping criteria during generation.")
+    parser.add_argument("-d", "--debug", action="store_true", help="Print debug information.")
+    parser.add_argument("-s", "--seed", type=int, default=0, help="The random seed to use.")
+    args = parser.parse_args()
+    
+    load_conf_file(args)
+    args.use_cuda = not args.cpu and torch.cuda.is_available()
 
-if torch.cuda.is_available() and use_cuda:
-    model.to("cuda")
-else:
-    use_cuda = False
+    if args.dataset is None:
+        raise ValueError("Please specify a dataset by setting the 'dataset' variable in the config file or using --dataset=[DATASET PATH].")
+    
+    if args.model_dir is None:
+        raise ValueError("Please specify a model directory by setting the 'model_dir' variable in the config file or using --model_dir=[MODEL DIRECTORY].")
+    
+    input_fn = os.path.join(args.dataset, args.file_name)
 
-stop_criteria = SATStoppingCriteria(tokenizer)
-stop_criteria = StoppingCriteriaList([stop_criteria]) if stop_crit else None
-completions, true_labels, pred_labels = batch_generate_completions(input_file, 
-                                                                   model, 
-                                                                   tokenizer, 
-                                                                   batch_size=batch_size, 
-                                                                   max_length=max_gen_len,
-                                                                   stop_criteria=stop_criteria)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed(args.seed)
 
-# Output the completions
-# for completion in completions:
-#     print(completion)
+    model, tokenizer = load_model_and_tokenizer(args.model_dir)
 
-with open(out_file, 'w') as file:
-    for completion in completions:
-        file.write(completion + "\n")
+    if args.debug:
+        print("Loaded Model", model)
+        print("Loaded Tokenizer Vocab", tokenizer.vocab)
 
-# Evaluate
-if true_labels and pred_labels:
-    for i in range(len(true_labels)):
-        if pred_labels[i] is None:
-            pred_labels[i] = not true_labels[i] # If the model didn't predict anything, it's wrong
-    f1 = f1_score(true_labels, pred_labels, pos_label=False)
-    acc = accuracy_score(true_labels, pred_labels)
-    prec = precision_score(true_labels, pred_labels, pos_label=False)
-    recall = recall_score(true_labels, pred_labels, pos_label=False)
-    print(f"F1 Score: {f1}")
-    print(f"Accuracy: {acc}")
-    print(f"Precision: {prec}")
-    print(f"Recall: {recall}")
-else:
-    print("No labels to evaluate.")
+    if args.use_cuda:
+        model.to("cuda")
+
+    stop_criteria = SATStoppingCriteria(tokenizer)
+    stop_criteria = StoppingCriteriaList([stop_criteria]) if args.stop_crit else None
+    completions, true_labels, pred_labels = batch_generate_completions(input_fn, 
+                                                                    model, 
+                                                                    tokenizer, 
+                                                                    batch_size=args.batch_size, 
+                                                                    max_length=args.max_len,
+                                                                    stop_criteria=stop_criteria,
+                                                                    debug=args.debug)
+
+    with open(args.out_file, 'w') as file:
+        for completion in completions:
+            file.write(completion + "\n")
+
+    # Evaluate
+    if true_labels and pred_labels:
+        for i in range(len(true_labels)):
+            if pred_labels[i] is None:
+                pred_labels[i] = not true_labels[i] # If the model didn't predict anything, it's wrong
+        f1 = f1_score(true_labels, pred_labels, pos_label=False)
+        acc = accuracy_score(true_labels, pred_labels)
+        prec = precision_score(true_labels, pred_labels, pos_label=False)
+        recall = recall_score(true_labels, pred_labels, pos_label=False)
+        print(f"F1 Score: {f1}")
+        print(f"Accuracy: {acc}")
+        print(f"Precision: {prec}")
+        print(f"Recall: {recall}")
+    else:
+        print("No labels to evaluate.")

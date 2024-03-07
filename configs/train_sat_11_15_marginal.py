@@ -1,9 +1,9 @@
-epochs = 20
-batch_size = 6
+epochs = 60
+batch_size = 10
 dataset = "datasets/SAT_11_15_Marginal"
 out_dir = 'models/sat-11-15-marginal'
-block_size = 1100
-
-# Deeper models with less embedding size
-n_layer = 20
-n_embd = 384
+block_size = 850
+old_tokenizer = False
+rand_pos = False
+perm_vars = True
+mask_formula = True

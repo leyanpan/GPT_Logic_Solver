@@ -11,6 +11,7 @@ def get_args():
     parser.add_argument("model_dirs", type=str, nargs='+', help="Directories where the models and tokenizers are stored, separated by spaces.")
     parser.add_argument("file_path", type=str, help="Path to the file containing the SAT dataset.")
     parser.add_argument("-n", "--nsamples", type=int, default=1, help="Number of SAT instances")
+    parser.add_argument("-i", "--index", type=int, default=0, help="Index of the SAT instance to visualize")
     return parser.parse_args()
 
 def load_model_and_tokenizer(model_dir):
@@ -163,9 +164,8 @@ def main():
             for i in range(args.nsamples):
                 line = f.readline()
                 kl_div = head_kl_div_matrix(model, tokenizer, line)
-                vmax=kl_div.max().item()
                 plt.figure(figsize=(12, 8))
-                plt.imshow(kl_div[:, :, -1].cpu().numpy(), cmap="hot", interpolation="nearest", vmin=0, vmax=vmax)
+                plt.imshow(kl_div[:, :, args.index].cpu().numpy(), cmap="hot", interpolation="nearest", vmin=0)
                 plt.colorbar()
                 plt.title(f"KL Divergence Matrix for {model_dir}")
                 plt.xlabel("Head Index")

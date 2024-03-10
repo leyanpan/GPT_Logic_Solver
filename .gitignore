@@ -20,5 +20,6 @@ wandb/
 preds/
 train.txt
 test.txt
+figures/
 
 environment-dev.yml

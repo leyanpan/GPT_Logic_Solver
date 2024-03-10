@@ -5,6 +5,7 @@ import random
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from sat_dataset import CustomTokenizer
+from utils import load_model_and_tokenizer
 
 def get_args():
     parser = argparse.ArgumentParser(description="Compare GPT-2 LM Head models and custom tokenizers to extract and compare token embeddings.")
@@ -13,10 +14,6 @@ def get_args():
     parser.add_argument("-n", "--nsamples", type=int, default=1, help="Number of SAT instances")
     return parser.parse_args()
 
-def load_model_and_tokenizer(model_dir):
-    model = GPT2LMHeadModel.from_pretrained(model_dir)
-    tokenizer = CustomTokenizer.from_pretrained(model_dir)
-    return model, tokenizer
 
 def corrupt_indices(input_ids:torch.Tensor, max_id, n_corrupt=5):
     """

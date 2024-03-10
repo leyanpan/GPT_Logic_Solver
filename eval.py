@@ -2,6 +2,7 @@ import torch
 from transformers import GPT2LMHeadModel, StoppingCriteria, StoppingCriteriaList, GenerationConfig
 import os
 from sat_dataset import CustomTokenizer
+import argparse
 import tqdm
 from utils import line_sat, load_model_and_tokenizer, SATStoppingCriteria, is_old_tokenizer, load_conf_file
 from sklearn.metrics import (f1_score, 
@@ -67,10 +68,8 @@ def batch_generate_completions(input_file, model, tokenizer, batch_size, max_len
 
     return completions, true_labels, pred_labels
 
-
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="Evaluate a GPT model on a SAT dataset.")
+def parse_args():
+    parser = argparse.ArgumentParser(description="Script to run GPT-2 model for dataset completion and evaluate SAT/UNSAT prediction accuracy")
     parser.add_argument("model_dir", type=str, default=None, help="The path to the model directory.")
     parser.add_argument("dataset", type=str, default=None, help="The path to the dataset.")
     parser.add_argument("-c", "--config", type=str, default=None, help="The path to the config file.")
@@ -87,6 +86,10 @@ if __name__ == "__main__":
     
     load_conf_file(args)
     args.use_cuda = not args.cpu and torch.cuda.is_available()
+
+
+if __name__ == "__main__":
+    args = parse_args()
 
     if args.dataset is None:
         raise ValueError("Please specify a dataset by setting the 'dataset' variable in the config file or using --dataset=[DATASET PATH].")

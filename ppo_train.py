@@ -5,8 +5,8 @@ import torch
 
 from tqdm import tqdm
 from transformers import StoppingCriteria, StoppingCriteriaList, GenerationConfig
-from trl import PPOTrainer, PPOConfig, AutoModelForCausalLMWithValueHead
-from utils import line_sat, load_model_and_tokenizer, SATStoppingCriteria, is_old_tokenizer, load_conf_file
+from trl import PPOTrainer, PPOConfig, AutoModelForCausalLMWithValueHead, create_reference_model
+from utils import line_sat, load_model_and_tokenizer, SATStoppingCriteria, is_old_tokenizer, load_conf_file, pad_max_len
 from eval import batch_generate_completions
 
 from sat_dataset import CustomTokenizer, SATDatasetForRL 
@@ -29,7 +29,8 @@ file_name = 'train.txt'
 
 # PPO training
 exp_name = dataset
-mini_batch_size =16
+batch_size = 128
+mini_batch_size = 16
 temperature = 1.0
 gradient_accumulation_steps = 1
 epochs = 4
@@ -51,12 +52,17 @@ debug = False
 
 # some initialization
 exec(open('configurator.py').read())
+if debug:
+    use_wandb = False
 
 torch.manual_seed(0)
 
 if torch.cuda.is_available() and use_cuda:
     device = torch.device("cuda")
     torch.cuda.manual_seed(0)
+else:
+    device = torch.device("cpu")
+    use_cuda = False
 
 # To prevent overwriting existing models
 if append_timestamp:
@@ -71,29 +77,38 @@ if model_dir is None:
 # helper functions for different rewards (consider building classes in a seperate module) for online / oracle
 def simple_offline_outcome_supervised_reward(responses, expected):
     # this might be inneficient?
-    matches = []
-    L_cots = []
+    rewards = []
+    # L_cots = []
 
     for response, expected_outcome in zip(responses, expected):
-        match = 1.0 if (line_sat(response) == line_sat(expected_outcome)) else -1.0
-        L_cot = len(response)
+        L_c = len(response)
+        rewards.append(math.exp(-length_penalty * L_c) if (line_sat(response) == line_sat(expected_outcome)) else -1.0)
+        # L_cot = len(response)
 
-        matches.append(match)
-        L_cots.append(L_cot)
+        # matches.append(match)
+        # L_cots.append(L_cot)
 
-    m = torch.tensor(matches)
-    L_c = torch.tensor(L_cots)
+    # m = torch.tensor(matches)
 
-    rewards = m * torch.exp(-length_penalty * L_c)
+    # rewards = m * torch.exp(-length_penalty * L_c)
 
     # ppo_trainer wants a list of tensors, ffs
-    return [reward for reward in rewards]
+    return [torch.tensor(reward) for reward in rewards]
+
+def collator(data):
+    return {key: [d[key] for d in data] for key in data[0]}
 
 # Load the model
 model, tokenizer = load_model_and_tokenizer(model_dir)
-wrapped_model = AutoModelForCausalLMWithValueHead(model)
-wrapped_model.is_peft_model = False
-
+if debug:
+    torch.set_printoptions(threshold=5000)
+    def hook(module, input, kwargs, output):
+        if input[0].shape[1] > 1:
+            print(input, kwargs)
+    model.transformer.register_forward_hook(hook, with_kwargs=True)
+model = AutoModelForCausalLMWithValueHead(model)
+model.is_peft_model = False
+ref_model = create_reference_model(model)
 
 # instantiate the dataset
 dataset_path = os.path.join(dataset, file_name)
@@ -106,23 +121,20 @@ dataset = SATDatasetForRL(
     old_tokenizer=is_old_tokenizer(tokenizer),
 )
 
+
 # set up generation
 stop_criteria = SATStoppingCriteria(tokenizer)
 stop_criteria = StoppingCriteriaList([stop_criteria]) if stop_crit else None
 
-gen_config = GenerationConfig(
-    max_length=min(max_gen_len, model.config.n_positions),
-    num_return_sequences=1,
-    temperature=temperature,  # not used in eval, could be used here?
-
-)
-
-gen_config.pad_token_id = tokenizer.pad_token_id
-gen_config.eos_token_id = tokenizer.eos_token_id
 
 generation_kwargs = {
-    "generation_config": gen_config,
-    "stopping_criteria": stop_criteria,
+    "min_length": -1, # don't ignore the EOS token (see above)
+    "top_k": 0.0, # no top-k sampling
+    "top_p": 1.0, # no nucleus sampling
+    "do_sample": True, # yes, we want to sample
+    "pad_token_id": tokenizer.pad_token_id, # most decoder models don't have a padding token - use EOS token instead
+    "eos_token_id": tokenizer.eos_token_id,
+    "max_new_tokens": 400,
     "return_prompt": False,
 }
 
@@ -130,46 +142,41 @@ generation_kwargs = {
 ppo_config = PPOConfig(
     exp_name=exp_name,
     learning_rate=learning_rate,
+    batch_size=batch_size,
     mini_batch_size=mini_batch_size,
     gradient_accumulation_steps=gradient_accumulation_steps,
     ppo_epochs=epochs,
+    log_with='wandb' if use_wandb else None,
 )
-
-if use_wandb:
-    ppo_config.wandb = True
 
 ppo_trainer = PPOTrainer(
     config = ppo_config,
-    model = wrapped_model,
+    model = model,
+    ref_model = ref_model,
     tokenizer = tokenizer,
     dataset = dataset,
-    lr_scheduler = lr_scheduler,
+    data_collator=collator,
 )
 
 # Training loop
 for epoch in tqdm(range(ppo_trainer.config.ppo_epochs), "epoch: "):
     for batch in tqdm(ppo_trainer.dataloader):
         queries = batch["query"]
-        # query_batch = tokenizer.batch_encode_plus(
-        #     queries, 
-        #     return_tensors="pt", 
-        #     padding=True,
-        #     truncation=True,
-        # )["input_ids"].to(device)
-        
 
-        # # It wants it as a list of tensors, ffs
-        query_tensors = [tokenizer(query, return_tensors='pt', padding=False)["input_ids"].squeeze().to(device) for query in queries]
+        query_tensors = [tokenizer.encode(query, return_tensors='pt', padding=False).squeeze().to(device) for query in queries]
         # #### Get response 
+        ppo_trainer.tokenizer.padding_side = "left"
         response_tensors = ppo_trainer.generate(query_tensors, **generation_kwargs)
         # response_tensors = ppo_trainer.model.generate(query_batch, **generation_kwargs)
         batch["response"] = [tokenizer.decode(r.squeeze()) for r in response_tensors]
         # response_tensors = [tokenizer(responses[i].squeeze())["input_ids"] for i in range(len(responses))]
-        print(batch["response"][:4])
-        print(batch["expected_response"][:4])
         #### Compute reward score
         rewards = simple_offline_outcome_supervised_reward(batch["response"], batch["expected_response"])
+        # query_tensors = pad_max_len(query_tensors, tokenizer, device)
         #### Run PPO step
+        if debug:
+            print("Decoded Responses:", batch["response"][:5])
+        ppo_trainer.tokenizer.padding_side = "right"
         stats = ppo_trainer.step(query_tensors, response_tensors, rewards)
         ppo_trainer.log_stats(stats, batch, rewards)
 

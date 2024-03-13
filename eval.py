@@ -86,6 +86,7 @@ def parse_args():
     
     load_conf_file(args)
     args.use_cuda = not args.cpu and torch.cuda.is_available()
+    return args
 
 
 if __name__ == "__main__":

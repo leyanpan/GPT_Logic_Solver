@@ -64,7 +64,6 @@ print("Token Set:", custom_tokens)
 
 # Initialize custom tokenizer
 tokenizer = CustomTokenizer(custom_tokens)
-tokenizer.add_special_tokens({'pad_token': '[EOS]'})
 
 # Initialize GPT-2 configuration
 config = GPT2Config(vocab_size=len(tokenizer.vocab), 

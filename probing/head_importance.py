@@ -11,6 +11,8 @@ def get_args():
     parser.add_argument("model_dirs", type=str, nargs='+', help="Directories where the models and tokenizers are stored, separated by spaces.")
     parser.add_argument("file_path", type=str, help="Path to the file containing the SAT dataset.")
     parser.add_argument("-n", "--nsamples", type=int, default=1, help="Number of SAT instances")
+    parser.add_argument("-c", "--corrupt", type=str, choices=["var", "zero"], default="var", help="Corruption strategy to use")
+    parser.add_argument("-i", "--index", type=int, default=0, help="Index of the SAT instance to visualize")
     return parser.parse_args()
 
 def load_model_and_tokenizer(model_dir):
@@ -95,7 +97,7 @@ def forward_corrupted_head(model: GPT2LMHeadModel, input_ids, corrupted_head_vec
 
     return output_logits
 
-def corrupt_input(input_str):
+def var_corrupt(input_str):
     # Simple strategy: replace all variables (positive or negative) with a random token, negated with 0.5 probability
     tokens = input_str.split()
     corrupted_tokens = []
@@ -112,6 +114,11 @@ def corrupt_input(input_str):
             corrupted_tokens.append(token)
     return " ".join(corrupted_tokens)
 
+def zero_corrupt(input_str):
+    tokens = input_str.split()
+    tokens = ['0' for _ in tokens]
+    return " ".join(tokens)
+
 def corrupt_kl_divergence(model, input_ids, corrupt_head_idx, corrupted_head_vectors, original_probs, start):
 
     # Forward pass with the corrupted head vectors
@@ -122,20 +129,18 @@ def corrupt_kl_divergence(model, input_ids, corrupt_head_idx, corrupted_head_vec
 
     return kl_divergence
 
-def head_kl_div_matrix(model, tokenizer, input_str, corrupt_func=corrupt_input):
+def head_kl_div_matrix(model, tokenizer, input_str, corrupt_func=var_corrupt):
     # Corrupt the input and get the head vectors for the corrupted input
-    corrupted_input = corrupt_func(input_str)
     if "-1" not in tokenizer.vocab:
         input_str = input_str.replace("-", "- ")
-        corrupted_input = corrupted_input.replace("-", "- ")
+    corrupted_input = corrupt_func(input_str)
     corrupted_ids = tokenizer(corrupted_input, return_tensors="pt")["input_ids"]
     corrupted_ids = corrupted_ids.to(model.device)
-
-    sep_token_id = tokenizer.encode("[SEP]")[0]
-    sep_token_index = (corrupted_ids[0] == sep_token_id).nonzero(as_tuple=False).item()
-
     input_ids = tokenizer(input_str, return_tensors="pt")["input_ids"]
     input_ids = input_ids.to(model.device)
+
+    sep_token_id = tokenizer.encode("[SEP]")[0]
+    sep_token_index = (input_ids[0] == sep_token_id).nonzero(as_tuple=False).item()
     # Forward pass with the original input
     with torch.no_grad():
         original_output_logits = model(input_ids=input_ids)[0]
@@ -149,10 +154,12 @@ def head_kl_div_matrix(model, tokenizer, input_str, corrupt_func=corrupt_input):
     for layer in range(model.config.n_layer):
         for head in range(model.config.n_head):
             kl_div_matrix[layer, head] = corrupt_kl_divergence(model, input_ids, [(layer, head)], corrupted_head_vectors, original_probs, sep_token_index)
-    return kl_div_matrix
+    return kl_div_matrix, input_str.split()[sep_token_index + 1:]
     
 def main():
     args = get_args()
+    corrupt_funcs = {"var": var_corrupt, "zero": zero_corrupt}
+    corrupt_func = corrupt_funcs[args.corrupt]
 
     for model_dir in args.model_dirs:
         model, tokenizer = load_model_and_tokenizer(model_dir)
@@ -162,12 +169,11 @@ def main():
         with open(args.file_path, "r") as f:
             for i in range(args.nsamples):
                 line = f.readline()
-                kl_div = head_kl_div_matrix(model, tokenizer, line)
-                vmax=kl_div.max().item()
+                kl_div, trace = head_kl_div_matrix(model, tokenizer, line, corrupt_func=corrupt_func)
                 plt.figure(figsize=(12, 8))
-                plt.imshow(kl_div[:, :, -1].cpu().numpy(), cmap="hot", interpolation="nearest", vmin=0, vmax=vmax)
+                plt.imshow(kl_div[:, :, args.index].cpu().numpy(), cmap="hot", interpolation="nearest", vmin=0)
                 plt.colorbar()
-                plt.title(f"KL Divergence Matrix for {model_dir}")
+                plt.title(f"KL Divergence Matrix for {model_dir}, Correct: {trace[args.index]}")
                 plt.xlabel("Head Index")
                 plt.ylabel("Layer Index")
                 plt.show()

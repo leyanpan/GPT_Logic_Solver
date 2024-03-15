@@ -44,7 +44,6 @@ def load_model_and_tokenizer(model_dir, padding_side="left"):
     model = GPT2LMHeadModel.from_pretrained(model_dir)
     tokenizer = CustomTokenizer.from_pretrained(model_dir)
     tokenizer.padding_side = padding_side
-    tokenizer.add_special_tokens({'pad_token': '[EOS]', 'eos_token': '[EOS]'})
     return model, tokenizer
 
 # Very inelegant way to load a config file
@@ -56,3 +55,8 @@ def load_conf_file(args, key='config'):
             if '__builtins__' in vars(args):
                 del vars(args)['__builtins__']
         return args
+    
+def pad_max_len(input_ids, tokenizer, device):
+    input = {"input_ids": input_ids}
+    res = tokenizer.pad(input, padding=True, return_tensors="pt")
+    return [input_id.to(device) for input_id in res['input_ids']]

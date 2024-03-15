@@ -15,6 +15,7 @@ class CustomTokenizer(PreTrainedTokenizer):
         self.vocab = {v: k for k, v in enumerate(vocab_list)}
         self.ids_to_tokens = {k: v for v, k in self.vocab.items()}
         super().__init__(**kwargs)
+        self.add_special_tokens({'pad_token': '[EOS]', 'eos_token': '[EOS]'})
 
     @classmethod
     def from_pretrained(cls, dir):

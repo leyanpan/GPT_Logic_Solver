@@ -100,6 +100,9 @@ if __name__ == "__main__":
     
     input_fn = os.path.join(args.dataset, args.file_name)
 
+    if args.out_file is None:
+        args.out_file = os.path.join("preds", os.path.basename(args.model_dir) + os.path.basename(args.dataset) + ".txt")
+
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
 
@@ -122,9 +125,6 @@ if __name__ == "__main__":
                                                                     stop_criteria=stop_criteria,
                                                                     debug=args.debug)
 
-    with open(args.out_file, 'w') as file:
-        for completion in completions:
-            file.write(completion + "\n")
 
     # Evaluate
     if true_labels and pred_labels:
@@ -141,3 +141,7 @@ if __name__ == "__main__":
         print(f"Recall: {recall}")
     else:
         print("No labels to evaluate.")
+        
+    with open(args.out_file, 'w') as file:
+        for completion in completions:
+            file.write(completion + "\n")

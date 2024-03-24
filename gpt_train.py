@@ -5,6 +5,8 @@ from transformers import (AutoModel,
                           GPT2Config,
                           GPT2LMHeadModel, 
                           GPT2Model,
+                          LlamaConfig,
+                          LlamaForCausalLM,
                           PreTrainedTokenizer, 
                           Trainer, 
                           TrainingArguments, 
@@ -40,6 +42,7 @@ perm_vars = True
 load_model = None
 old_tokenizer = False
 mask_formula = True
+model = "gpt2"
 ##################
 
 exec(open('configurator.py').read())
@@ -65,34 +68,58 @@ print("Token Set:", custom_tokens)
 # Initialize custom tokenizer
 tokenizer = CustomTokenizer(custom_tokens)
 
-# Initialize GPT-2 configuration
-config = GPT2Config(vocab_size=len(tokenizer.vocab), 
-                    n_ctx=block_size,        
-                    n_embd=n_embd,        
-                    n_layer=n_layer,       
-                    n_head=n_head, 
-                    n_positions=block_size,
-                    bos_token_id=tokenizer.vocab["[EOS]"],
-                    eos_token_id=tokenizer.vocab["[EOS]"],
-                )
+if model == "gpt2":
+    # Initialize GPT-2 configuration
+    config = GPT2Config(vocab_size=len(tokenizer.vocab), 
+                        n_ctx=block_size,        
+                        n_embd=n_embd,        
+                        n_layer=n_layer,       
+                        n_head=n_head, 
+                        n_positions=block_size,
+                        bos_token_id=tokenizer.vocab["[EOS]"],
+                        eos_token_id=tokenizer.vocab["[EOS]"],
+                    )
 
-# Initialize GPT-2 model
-model = GPT2LMHeadModel(config)
+    # Initialize GPT-2 model
+    model = GPT2LMHeadModel(config)
 
-if load_model is not None:
-    model = GPT2LMHeadModel.from_pretrained(load_model)
+    if load_model is not None:
+        model = GPT2LMHeadModel.from_pretrained(load_model)
+
+elif model == "llama":
+
+    if load_model is not None:
+        model = LlamaForCausalLM.from_pretrained(load_model)
+    else:
+        # For RoPE Encoding
+        config = LlamaConfig(vocab_size=len(tokenizer.vocab),
+                            max_position_embeddings=block_size,
+                            num_hidden_layers=n_layer,
+                            num_attention_heads=n_head,
+                            hidden_size=n_embd,
+                            intermediate_size=4 * n_embd, # Where did 11008 even come from?
+                            bos_token_id=tokenizer.vocab["[EOS]"],
+                            eos_token_id=tokenizer.vocab["[EOS]"],
+                            )
+        
+        model = LlamaForCausalLM(config)
+
+else:
+    raise ValueError("Invalid model type. Please choose either 'gpt2' or 'llama'.")
+
+
 
 # Load dataset
 dataset_path = get_dataset_path(dataset)
 dataset = SATDataset(file_path=dataset_path,
-                     tokenizer=tokenizer,
-                     max_id=max_id, 
-                     block_size=block_size, 
-                     remove_trace=remove_trace, 
-                     shift_within_block=rand_pos, 
-                     permute_constants=perm_vars,
-                     mask_formula=mask_formula,
-                     old_tokenizer=old_tokenizer)
+                    tokenizer=tokenizer,
+                    max_id=max_id, 
+                    block_size=block_size, 
+                    remove_trace=remove_trace, 
+                    shift_within_block=rand_pos, 
+                    permute_constants=perm_vars,
+                    mask_formula=mask_formula,
+                    old_tokenizer=old_tokenizer)
 
 
 # Split the dataset into training and validation sets

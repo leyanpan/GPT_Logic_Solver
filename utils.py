@@ -1,6 +1,6 @@
 import os
 import torch
-from transformers import GPT2LMHeadModel, StoppingCriteria, StoppingCriteriaList, GenerationConfig
+from transformers import GPT2LMHeadModel, StoppingCriteria, StoppingCriteriaList, GenerationConfig, AutoModelForCausalLM
 from sat_dataset import CustomTokenizer
 
 
@@ -41,7 +41,7 @@ def line_sat(line, sep=' '):
     return None
 
 def load_model_and_tokenizer(model_dir, padding_side="left"):
-    model = GPT2LMHeadModel.from_pretrained(model_dir)
+    model = AutoModelForCausalLM.from_pretrained(model_dir)
     tokenizer = CustomTokenizer.from_pretrained(model_dir)
     tokenizer.padding_side = padding_side
     return model, tokenizer
@@ -55,6 +55,17 @@ def load_conf_file(args, key='config'):
             if '__builtins__' in vars(args):
                 del vars(args)['__builtins__']
         return args
+    
+def get_context_size(model):
+    # List of known attribute names for context size across different models
+    known_attributes = ['max_position_embeddings', 'n_positions', 'n_ctx']
+    
+    # Attempt to find and return the value of the first matching attribute
+    for attr in known_attributes:
+        if hasattr(model.config, attr):
+            return getattr(model.config, attr)
+    # Return None if none of the attributes are found
+    raise AttributeError("Context size attribute not found in model configuration for attribute names: " + ", ".join(known_attributes))
     
 def pad_max_len(input_ids, tokenizer, device):
     input = {"input_ids": input_ids}

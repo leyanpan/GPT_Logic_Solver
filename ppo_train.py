@@ -150,17 +150,13 @@ if __name__ == "__main__":
             # #### Get response 
             ppo_trainer.tokenizer.padding_side = "left"
             response_tensors = ppo_trainer.generate(query_tensors, **generation_kwargs)
-            # response_tensors = ppo_trainer.model.generate(query_batch, **generation_kwargs)
             batch["response"] = [tokenizer.decode(r.squeeze()) for r in response_tensors]
-            # response_tensors = [tokenizer(responses[i].squeeze())["input_ids"] for i in range(len(responses))]
-            #### Compute reward score
             rewards = simple_offline_outcome_supervised_reward(batch["response"], batch["expected_response"])
-            # query_tensors = pad_max_len(query_tensors, tokenizer, device)
-            #### Run PPO step
-            if debug:
+            if args.debug:
                 print("Decoded Responses:", batch["response"][:5])
+            # A line that spent me debugging for 5 days to figure out
             ppo_trainer.tokenizer.padding_side = "right"
             stats = ppo_trainer.step(query_tensors, response_tensors, rewards)
             ppo_trainer.log_stats(stats, batch, rewards)
         # save model
-        model.save_pretrained(out_dir)
+        model.save_pretrained(args.out_dir)

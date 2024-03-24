@@ -4,7 +4,7 @@ import os
 from sat_dataset import CustomTokenizer
 import argparse
 import tqdm
-from utils import line_sat, load_model_and_tokenizer, SATStoppingCriteria, is_old_tokenizer, load_conf_file
+from utils import line_sat, load_model_and_tokenizer, SATStoppingCriteria, is_old_tokenizer, load_conf_file, get_context_size
 from sklearn.metrics import (f1_score, 
                              accuracy_score, 
                              precision_score, 
@@ -20,7 +20,9 @@ def batch_generate_completions(input_file, model, tokenizer, batch_size, max_len
             lines = [line.strip().replace("-", "- ") for line in file.readlines()]
         else:
             lines = [line.strip() for line in file.readlines()]
-    gen_config = GenerationConfig(max_length=min(max_length, model.config.n_positions),
+    
+    context_size = get_context_size(model)
+    gen_config = GenerationConfig(max_length=min(max_length, context_size),
                                   num_return_sequences=1)
 
     gen_config.pad_token_id = tokenizer.pad_token_id
@@ -141,7 +143,7 @@ if __name__ == "__main__":
         print(f"Recall: {recall}")
     else:
         print("No labels to evaluate.")
-        
+
     with open(args.out_file, 'w') as file:
         for completion in completions:
             file.write(completion + "\n")

@@ -5,6 +5,7 @@ import random
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from sat_dataset import CustomTokenizer
+from probing.utils import task_ids
 
 def get_args():
     parser = argparse.ArgumentParser(description="Compare GPT-2 LM Head models and custom tokenizers to extract and compare token embeddings.")
@@ -13,6 +14,7 @@ def get_args():
     parser.add_argument("-n", "--nsamples", type=int, default=1, help="Number of SAT instances")
     parser.add_argument("-c", "--corrupt", type=str, choices=["var", "zero"], default="var", help="Corruption strategy to use")
     parser.add_argument("-i", "--index", type=int, default=0, help="Index of the SAT instance to visualize")
+    parser.add_argument("-p", "--plot_matrix", action="store_true", help="Plot the KL divergence matrix for index i of the Trace")
     return parser.parse_args()
 
 def load_model_and_tokenizer(model_dir):
@@ -170,13 +172,15 @@ def main():
             for i in range(args.nsamples):
                 line = f.readline()
                 kl_div, trace = head_kl_div_matrix(model, tokenizer, line, corrupt_func=corrupt_func)
-                plt.figure(figsize=(12, 8))
-                plt.imshow(kl_div[:, :, args.index].cpu().numpy(), cmap="hot", interpolation="nearest", vmin=0)
-                plt.colorbar()
-                plt.title(f"KL Divergence Matrix for {model_dir}, Correct: {trace[args.index]}")
-                plt.xlabel("Head Index")
-                plt.ylabel("Layer Index")
-                plt.show()
+                if args.plot_matrix:
+                    plt.figure(figsize=(12, 8))
+                    plt.imshow(kl_div[:, :, args.index].cpu().numpy(), cmap="hot", interpolation="nearest", vmin=0)
+                    plt.colorbar()
+                    plt.title(f"KL Divergence Matrix for {model_dir}, Correct: {trace[args.index]}")
+                    plt.xlabel("Head Index")
+                    plt.ylabel("Layer Index")
+                    plt.show()
+                
 
         
 

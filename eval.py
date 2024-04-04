@@ -103,7 +103,8 @@ if __name__ == "__main__":
     input_fn = os.path.join(args.dataset, args.file_name)
 
     if args.out_file is None:
-        args.out_file = os.path.join("preds", os.path.basename(args.model_dir) + os.path.basename(args.dataset) + ".txt")
+        args.out_file = os.path.join("preds",f"{os.path.basename(args.model_dir)}_{os.path.basename(args.dataset)}_{args.file_name}")
+        print(f"Writing to {args.out_file}.")
 
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
@@ -129,14 +130,18 @@ if __name__ == "__main__":
 
 
     # Evaluate
+    num_failed = 0
     if true_labels and pred_labels:
         for i in range(len(true_labels)):
             if pred_labels[i] is None:
+                num_failed += 1
                 pred_labels[i] = not true_labels[i] # If the model didn't predict anything, it's wrong
         f1 = f1_score(true_labels, pred_labels, pos_label=False)
         acc = accuracy_score(true_labels, pred_labels)
         prec = precision_score(true_labels, pred_labels, pos_label=False)
         recall = recall_score(true_labels, pred_labels, pos_label=False)
+        completion_acc = 1 - num_failed / len(true_labels)
+        print(f"Completion: {completion_acc}")
         print(f"F1 Score: {f1}")
         print(f"Accuracy: {acc}")
         print(f"Precision: {prec}")

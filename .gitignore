@@ -14,6 +14,8 @@ meta.pkl
 
 llama_finetune_sat.py
 models/
+temp/
+figures/
 
 model_ckpts/
 wandb/
@@ -22,5 +24,7 @@ train.txt
 test.txt
 figures/
 temp/
+datasets/SAT_var_eval/*.txt
+results/
 
 environment-dev.yml

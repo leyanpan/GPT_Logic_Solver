@@ -1,7 +1,7 @@
 epochs = 60
 block_size = 850
 batch_size = 10
-out_dir = 'models/sat-6-10-var-nopos'
+out_dir = 'models/sat-6-10-var-rope'
 dataset = "datasets/SAT_6_10_Var"
 old_tokenizer = False
 rand_pos = False

@@ -1,4 +1,4 @@
-from AssignTrace import AssignTrace
+from AssignTrace import AssignTrace, AssignTraceState
 # DPLL algorithm with custom heuristic and BCP, active_assignments record assignments made by heuristics as opposed to unit clause inference/BCP
 def dpll(clauses, n_vars, heuristic, assignment, tracer=None, MAX_ITER=None):
     if tracer is None:
@@ -15,6 +15,7 @@ def dpll(clauses, n_vars, heuristic, assignment, tracer=None, MAX_ITER=None):
     assert abs(var) in rem_vars
     # update assignment and formula
     assignment[abs(var)] = (var > 0)
+    # active assignment
     tracer.active_assign(assignment, var)
     new_clauses = update_formula(clauses, var)
     if new_clauses == 'UNSAT':
@@ -38,19 +39,23 @@ def dpll(clauses, n_vars, heuristic, assignment, tracer=None, MAX_ITER=None):
                 tracer.unsat()
     tracer.unassign(assignment, var)
     # opposite assignment
-    tracer.active_assign(assignment, -var)
+    if isinstance(tracer, AssignTraceState):
+        assignment[abs(var)] = not (var > 0)
+    else:
+        tracer.active_assign(assignment, -var)
     new_clauses = update_formula(clauses, -var)
     if new_clauses == 'UNSAT':
         # contradictory assignment
-        tracer.unsat()
+        if not isinstance(tracer, AssignTraceState):
+            tracer.unsat()
     else:
         # unit clause inference
         res, new_clauses, new_assignment  = bcp(new_clauses, assignment, tracer)
         if res == 'SAT':
             return 'SAT', new_assignment
         if res == 'UNSAT':
-            tracer.unsat()
-            pass
+            if not isinstance(tracer, AssignTraceState):
+                tracer.unsat()
         else:
             # Recursive call
             res, new_assignment = dpll(new_clauses, n_vars, heuristic, new_assignment, tracer, MAX_ITER)
@@ -59,7 +64,8 @@ def dpll(clauses, n_vars, heuristic, assignment, tracer=None, MAX_ITER=None):
             if res == 'UNKNOWN':
                 return 'UNKNOWN', None
             if res == 'UNSAT':
-                tracer.unsat()
+                if not isinstance(tracer, AssignTraceState):
+                    tracer.unsat()
     tracer.unassign(assignment, -var)
     return 'UNSAT', None
 

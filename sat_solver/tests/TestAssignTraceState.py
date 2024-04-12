@@ -65,8 +65,6 @@ class TestAssignTraceState(unittest.TestCase):
         assign_trace_state.passive_assign(assignment, 2)
         # Conflict
         assign_trace_state.unsat()
-        # Decide -3 (As in DPLL implementation, although should be Backtrack)
-        assign_trace_state.active_assign(assignment, -3)
         # Unit Propagation 2 by [2, 3, -1]
         assign_trace_state.passive_assign(assignment, 2)
         # This is a SAT assignment
@@ -78,11 +76,11 @@ class TestAssignTraceState(unittest.TestCase):
     def test_full_dpll(self):
         from dpll import dpll
         from heuristics import custom_heuristic
-        dimacs = "-6 8 -1 0 1 -6 4 0 -1 -8 -5 0 6 -8 -9 0 -8 6 -4 0 -7 5 -6 0 -2 -4 -9 0 6 8 9 0 -7 9 -5 0 -7 -4 6 0 1 -3 6 0 -8 3 9 0 -6 -1 -3 0 1 9 -4 0 -2 -8 -1 0 2 -6 -3 0 -4 8 -3 0 -1 8 -7 0 4 -3 -2 0 4 -6 -5 0 -8 -6 4 0 5 -4 6 0 -4 7 2 0 6 -9 -3 0 -7 4 -9 0 -9 -8 5 0 -1 -9 4 0 1 6 -7 0 -3 -5 8 0 6 8 -5 0 -5 2 4 0 -6 7 -9 0 3 8 9 0 1 -3 -4 0 6 -3 -8 0 3 -4 -7 0 4 8 1 0"
+        dimacs = "-9 4 -10 0 -3 9 8 0 9 -3 -10 0 -7 -3 8 0 -2 -8 -5 0 8 -2 -5 0 3 -9 -10 0 6 2 10 0 -3 -9 5 0 -7 8 -5 0 8 -4 6 0 -4 -9 6 0 3 5 -1 0 3 -7 9 0 -9 -7 -8 0 3 -4 8 0 -3 -5 -6 0 4 9 7 0 7 2 -8 0 -9 7 -5 0 6 -9 2 0 2 7 5 0 -7 6 2 0 10 -4 -5 0 1 -7 -5 0 6 9 -7 0 7 -1 8 0 -2 10 -3 0 -5 1 10 0 -5 -7 1 0 4 -3 -10 0 -5 2 -10 0 1 6 3 0 4 8 7 0 -3 6 4 0 -1 -2 -8 0 3 -6 5 0 -9 10 -1 0 3 7 1 0 10 -2 8 0 7 4 -9 0 2 9 -8 0 "
         elements = dimacs.split()
         clauses = []
         current_clause = []
-        num_vars = 9
+        num_vars = 10
         assignment = [None] * (num_vars + 1)
         tracer = AssignTraceState(clauses)
 

@@ -1,7 +1,7 @@
 import sys
 from pysat.solvers import Glucose3
 
-def find_successful_sequence(sequence):
+def extract_assignment(sequence):
     stack = [[]]  # Start with an empty list to hold the successful sequence
 
     # Helper function to parse numbers and control characters in the sequence
@@ -20,7 +20,7 @@ def find_successful_sequence(sequence):
         elif sequence[i] == ')':
             # End of a subsequence
             subseq = stack.pop()
-        elif sequence[i].isdigit() or sequence[i] == '-':
+        elif (sequence[i].isdigit() or sequence[i] == '-') and sequence[i] != '0':
             # Parse a number and add to the current subsequence
             num, i = parse_number(i)
             stack[-1].extend([int(n) for n in num.split() if n.isdigit() or n[1:].isdigit()])
@@ -153,7 +153,7 @@ if __name__ == "__main__":
                 assert formula is not None
                 assert trace is not None
                 # Parse the trace into a list of assignments
-                assignments = find_successful_sequence(trace)
+                assignments = extract_assignment(trace)
                 total_sat += 1
                 # Check if the formula is satisfied by each assignment
                 if check_cnf_satisfiability(formula, assignments):

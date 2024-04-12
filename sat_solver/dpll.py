@@ -1,6 +1,6 @@
 from AssignTrace import AssignTrace, AssignTraceState
 # DPLL algorithm with custom heuristic and BCP, active_assignments record assignments made by heuristics as opposed to unit clause inference/BCP
-def dpll(clauses, n_vars, heuristic, assignment, tracer=None, MAX_ITER=None):
+def dpll(clauses, n_vars, heuristic, assignment, tracer=None, MAX_ITER=None, polarity=True):
     if tracer is None:
         # We still need to assign so just initialize a dummy tracer
         tracer = AssignTrace()
@@ -23,14 +23,14 @@ def dpll(clauses, n_vars, heuristic, assignment, tracer=None, MAX_ITER=None):
         tracer.unsat()
     else:
         # unit clause inference
-        res, new_clauses, new_assignment = bcp(new_clauses, assignment, tracer)
+        res, new_clauses, new_assignment = bcp(new_clauses, assignment, tracer, polarity=polarity)
         if res == 'SAT':
             return 'SAT', new_assignment
         if res == 'UNSAT':
             tracer.unsat()
         else:
             # Recursive call
-            res, new_assignment = dpll(new_clauses, n_vars, heuristic, new_assignment, tracer, MAX_ITER)
+            res, new_assignment = dpll(new_clauses, n_vars, heuristic, new_assignment, tracer, MAX_ITER, polarity=polarity)
             if res == 'SAT':
                 return 'SAT', new_assignment
             if res == 'UNKNOWN':
@@ -50,7 +50,7 @@ def dpll(clauses, n_vars, heuristic, assignment, tracer=None, MAX_ITER=None):
             tracer.unsat()
     else:
         # unit clause inference
-        res, new_clauses, new_assignment  = bcp(new_clauses, assignment, tracer)
+        res, new_clauses, new_assignment  = bcp(new_clauses, assignment, tracer, polarity=polarity)
         if res == 'SAT':
             return 'SAT', new_assignment
         if res == 'UNSAT':
@@ -58,7 +58,7 @@ def dpll(clauses, n_vars, heuristic, assignment, tracer=None, MAX_ITER=None):
                 tracer.unsat()
         else:
             # Recursive call
-            res, new_assignment = dpll(new_clauses, n_vars, heuristic, new_assignment, tracer, MAX_ITER)
+            res, new_assignment = dpll(new_clauses, n_vars, heuristic, new_assignment, tracer, MAX_ITER, polarity=polarity)
             if res == 'SAT':
                 return 'SAT', new_assignment
             if res == 'UNKNOWN':
@@ -90,7 +90,7 @@ def update_formula(clauses, var):
     return new_clauses
 
 # repeat unit clause inference until no more unit clauses
-def bcp(clauses, assignment, tracer: AssignTrace):
+def bcp(clauses, assignment, tracer: AssignTrace, polarity=True):
     new_assignment = assignment.copy()
     while True:
         vars = set()
@@ -105,18 +105,19 @@ def bcp(clauses, assignment, tracer: AssignTrace):
                 updated = True
                 break
         # polarity assignment
-        for clause in clauses:
-            for var in clause:
-                vars.add(var)
-        for var in vars:
-            if -var not in vars:
-                new_assignment[abs(var)] = (var > 0)
-                tracer.passive_assign(new_assignment, var)
-                clauses = update_formula(clauses, var)
-                if clauses == 'UNSAT':
-                    return 'UNSAT', None, None
-                updated = True
-                break
+        if polarity:
+            for clause in clauses:
+                for var in clause:
+                    vars.add(var)
+            for var in vars:
+                if -var not in vars:
+                    new_assignment[abs(var)] = (var > 0)
+                    tracer.passive_assign(new_assignment, var)
+                    clauses = update_formula(clauses, var)
+                    if clauses == 'UNSAT':
+                        return 'UNSAT', None, None
+                    updated = True
+                    break
         if not updated:
             break
     if len(clauses) == 0:

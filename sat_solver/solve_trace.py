@@ -1,6 +1,6 @@
 import random
 
-from AssignTrace import AssignTraceClause, AssignTraceDPLL, AssignTraceCDCL
+from AssignTrace import AssignTraceClause, AssignTraceDPLL, AssignTraceCDCL, AssignTraceState
 from dpll import dpll, bcp
 from cdcl import cdcl
 from heuristics import random_heuristic, two_clause_heuristic, custom_heuristic
@@ -24,6 +24,7 @@ if __name__ == '__main__':
     parser.add_argument('-t', '--trace', help='Execution Trace Type', default='clause')
     parser.add_argument('-f', '--format', default='raw', help='input file format: DIMACS or Raw Clauses')
     parser.add_argument('-a', '--algo', help='Algo to use', default='dpll')
+    parser.add_argument('-p', '--polarity', help='Polarity Assignment', action='store_true')
     args = parser.parse_args()
     if args.output is None:
         # Get input file name without path and extension
@@ -49,16 +50,21 @@ if __name__ == '__main__':
                 n_clauses = len(clauses)
                 assignment = [None] * (n_vars + 1)
                 dpll_counter = 0
-                assign_clause = AssignTraceDPLL()
+                if args.trace == 'dpll' or args.trace == 'clause':
+                    assign_clause = AssignTraceDPLL()
+                elif args.trace == 'state':
+                    assign_clause = AssignTraceState(clauses)
+                else:
+                    raise ValueError('Invalid trace type')
                 res = 'UNKNOWN'
                 if args.algo == 'cdcl':
                     original_clauses = clauses[:]
                     assign_clause = AssignTraceCDCL(list(clauses))
                     res = cdcl(n_vars, heuristic, assign_clause)
                 else:
-                    res, new_clauses, assignment = bcp(clauses, assignment, assign_clause)
+                    res, new_clauses, assignment = bcp(clauses, assignment, assign_clause, polarity=args.polarity)
                     # TODO: should not dpll if bcp is SAT already, doesnt work for 1 0 case
-                    res, assignment = dpll(new_clauses, n_vars, heuristic, assignment, assign_clause)
+                    res, assignment = dpll(new_clauses, n_vars, heuristic, assignment, assign_clause, polarity=args.polarity)
                 if args.format == 'dimacs':
                     if res == 'SAT':
                         f.write(f"s cnf 1 {n_vars} {n_clauses}\n")
@@ -82,6 +88,9 @@ if __name__ == '__main__':
                         f.write(str(assign_clause))
                     elif args.trace == 'clause':
                         f.write(translate_trace(str(assign_clause), res))
+                    else:
+                        f.write(str(assign_clause))
+
                     # Final Solution
                     if res == 'SAT':
                         f.write(f" SAT\n")

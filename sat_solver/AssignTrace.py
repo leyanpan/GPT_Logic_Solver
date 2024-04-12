@@ -115,27 +115,20 @@ class AssignTraceDPLL(AssignTrace):
 
 
 class AssignTraceState(AssignTrace):
-    def __init__(self, clauses):
+    def __init__(self, clauses, proof_clause=False):
         self.tokens = ["|"]
         self.clauses = clauses
         self.state = []
         self.assignment = None
-        self.prev_act = None
+        self.proof_clause = proof_clause
         super().__init__()
 
     def active_assign(self, assignment, var):
-        # # If the current variable is already in our stored assignment, this means that its an "opposite" assignment that is automatically done by BackTracking
-        # if assignment[abs(var)] != None:
-        #     assert assignment[abs(var)] == (var > 0)
-        #     super().active_assign(assignment, var)
-        #     self.assignment = assignment
-        #     return
         self.tokens += ["Decide", str(var), "|"]
         self.state.append(f"D {var}")
         self.tokens += self.state + ["|"]
         super().active_assign(assignment, var)
         self.assignment = assignment
-        self.prev_act = "active"
 
     def passive_assign(self, assignment, var):
         up_clause = None
@@ -152,23 +145,21 @@ class AssignTraceState(AssignTrace):
                     up_clause = clause
                     break
         if up_clause:
-            self.tokens +=  [str(cvar) for cvar in up_clause] + ["0", "UP"] + [str(var), "|"]
+            if self.proof_clause:
+                self.tokens +=  [str(cvar) for cvar in up_clause] + ["0", "UP"] + [str(var), "|"]
+            else:
+                self.tokens += ["UP", str(var), "|"]
         else:
             self.tokens += ["Polarity", str(var), "|"]
         self.state.append(f"{var}")
         self.tokens += self.state + ["|"]
         super().passive_assign(assignment, var)
         self.assignment = assignment
-        self.prev_act = "passive"
 
     def sat(self):
         super().sat()
 
     def unsat(self):
-        print(self.state)
-        if self.prev_act == "unsat":
-            super().unsat()
-            return
         cont_clause = None
         for clause in self.clauses:
             is_cont_clause = True
@@ -186,15 +177,19 @@ class AssignTraceState(AssignTrace):
             if self.state[i][0] == "D":
                 bvar = int(self.state[i][2:])
                 break
-        self.tokens += [str(cvar) for cvar in cont_clause] + ["0", "BackTrack", str(-bvar), "|"]
-        remove = [abs(int(v)) for v in self.state[i + 1:]]
-        for r in remove:
-            self.assignment[r] = None
-        self.state = self.state[:i] + [str(-bvar)]
-        self.assignment[abs(bvar)] = not (bvar > 0)
-        self.tokens += self.state + ["|"]
+        if self.proof_clause:
+            self.tokens += [str(cvar) for cvar in cont_clause] + ["0"]
+        if bvar is None:
+            self.tokens += ["BackTrack", "0", "|"]
+        else:
+            self.tokens += ["BackTrack", str(-bvar), "|"]
+            remove = [abs(int(v)) for v in self.state[i + 1:]]
+            for r in remove:
+                self.assignment[r] = None
+            self.state = self.state[:i] + [str(-bvar)]
+            self.assignment[abs(bvar)] = not (bvar > 0)
+            self.tokens += self.state + ["|"]
         super().unsat()
-        self.prev_act = "unsat"
 
     def __str__(self):
         return " ".join(self.tokens)

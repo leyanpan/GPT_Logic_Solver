@@ -70,8 +70,10 @@ def dpll(clauses, n_vars, heuristic, assignment, tracer=None, MAX_ITER=None, pol
     return 'UNSAT', None
 
 # Create new formula with var assigned to value
-def update_formula(clauses, var):
+def update_formula(clauses, var, return_unit_clauses=False):
     new_clauses = []
+    unit_clauses = []
+    unsat = False
     for clause in clauses:
         if var in clause:
             continue
@@ -82,12 +84,16 @@ def update_formula(clauses, var):
                     continue
                 else:
                     new_clause.append(cvar)
-            if len(new_clause) == 0:
+            if len(new_clause) == 0 and not return_unit_clauses:
                 return 'UNSAT'
+            if len(new_clause) == 1:
+                unit_clauses.append(new_clause[0])
             new_clauses.append(new_clause)
         else:
+            if len(clause) == 1:
+                unit_clauses.append(clause[0])
             new_clauses.append(clause)
-    return new_clauses
+    return (new_clauses, unit_clauses) if return_unit_clauses else new_clauses
 
 # repeat unit clause inference until no more unit clauses
 def bcp(clauses, assignment, tracer: AssignTrace, polarity=True):

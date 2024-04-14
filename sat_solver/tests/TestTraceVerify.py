@@ -1,5 +1,5 @@
 import unittest
-from trace_verify import parse_dimacs_trace, verify_rup, extract_assignment_rup, is_valid_assignment, is_formula_satisfied, solve_sat, verify_traces
+from trace_verify import parse_dimacs_trace, verify_rup, extract_assignment_rup, is_valid_assignment, is_formula_satisfied, solve_sat, verify_traces, verify_all_steps
 
 class TestTraceVerify(unittest.TestCase):
 
@@ -36,6 +36,12 @@ class TestTraceVerify(unittest.TestCase):
         self.full_trace_unsat_mal = "-1 -7 -8 0 5 1 12 0 9 -13 10 0 12 9 6 0 -9 10 -15 0 11 5 14 0 2 -11 9 0 -4 -13 14 0 9 -11 15 0 5 -7 -8 0 5 -15 14 0 -9 -7 15 0 -11 9 -2 0 8 -7 4 0 -2 1 15 0 15 -11 -8 0 6 -2 9 0 -8 3 2 0 7 1 -8 0 -13 -11 10 0 -3 -11 -8 0 9 15 14 0 15 -6 -9 0 -12 10 6 0 -1 -5 -10 0 -15 7 -11 0 -4 2 -3 0 -15 -9 -1 0 4 1 -13 0 10 5 2 0 -4 -9 -10 0 13 -11 5 0 1 12 10 0 -6 13 -4 0 -1 -11 -8 0 13 14 11 0 4 -8 -14 0 7 5 -6 0 -8 -1 -2 0 12 11 -9 0 8 13 -2 0 -7 1 3 0 -11 15 13 0 14 8 7 0 -14 7 10 0 -2 -3 -10 0 4 -1 -6 0 -14 8 -6 0 10 4 13 0 -2 1 8 0 -13 5 3 0 8 6 -10 0 -7 -11 -4 0 -2 3 -10 0 1 11 -7 0 6 -12 7 0 10 13 4 0 -2 15 -13 0 -7 3 5 0 9 -8 14 0 5 -8 -11 0 5 10 7 0 -8 -10 1 0 13 14 -9 0 [SEP] ( 8 0 ( 1 0 -7 0 -11 0 -2 0 3 0 -4 0 -14 0 5 0 -10 0 -13 0 ) ( -1 0 7 0 5 0 3 0 -11 0 ( 10 0 -2 0 12 0 -4 0 -13 0 -6 0 -14 0 ) ( 9 0 15 0 14 0 -13 0 ) ( ( -9 0 ( -9 0 ( -30 0 ( -30 0 ( -8 0 ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ( -10 0 ( -25 0 ( -1 0 12 0 ( ) ) ( -7 0 -8 0 ( -1 0 ( -25 0 ( -7 0 ( -8 0 14 0 10 0 -6 0 5 0 12 0 9 0 -11 0 -15 0 -2 0 -13 0 -4 0 -3 0 ) ) ) ) ( -14 0 8 0 ( ( -7 0 ( ( -8 0 -7 0 -11 0 14 0 ( ) ) ) ) ) UNSAT"
         self.trace_6 = "( 8 0 ( 1 0 -7 0 -11 0 -2 0 3 0 -4 0 -14 0 5 0 -10 0 -13 0 ) ( -1 0 7 0 5 0 3 0 -11 0 ( 10 0 -2 0 12 0 -4 0 -13 0 -6 0 -14 0 ) ( 9 0 15 0 14 0 -13 0 ) ( ( -9 0 ( -9 0 ( -30 0 ( -30 0 ( -8 0 ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ( ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ( -10 0 ( -25 0 ( -1 0 12 0 ( ) ) ( -7 0 -8 0 ( -1 0 ( -25 0 ( -7 0 ( -8 0 14 0 10 0 -6 0 5 0 12 0 9 0 -11 0 -15 0 -2 0 -13 0 -4 0 -3 0 ) ) ) ) ( -14 0 8 0 ( ( -7 0 ( ( -8 0 -7 0 -11 0 14 0 ( ) ) ) ) )"
         self.formula_6 = [[-1, -7, -8], [5, 1, 12], [9, -13, 10], [12, 9, 6], [-9, 10, -15], [11, 5, 14], [2, -11, 9], [-4, -13, 14], [9, -11, 15], [5, -7, -8], [5, -15, 14], [-9, -7, 15], [-11, 9, -2], [8, -7, 4], [-2, 1, 15], [15, -11, -8], [6, -2, 9], [-8, 3, 2], [7, 1, -8], [-13, -11, 10], [-3, -11, -8], [9, 15, 14], [15, -6, -9], [-12, 10, 6], [-1, -5, -10], [-15, 7, -11], [-4, 2, -3], [-15, -9, -1], [4, 1, -13], [10, 5, 2], [-4, -9, -10], [13, -11, 5], [1, 12, 10], [-6, 13, -4], [-1, -11, -8], [13, 14, 11], [4, -8, -14], [7, 5, -6], [-8, -1, -2], [12, 11, -9], [8, 13, -2], [-7, 1, 3], [-11, 15, 13], [14, 8, 7], [-14, 7, 10], [-2, -3, -10], [4, -1, -6], [-14, 8, -6], [10, 4, 13], [-2, 1, 8], [-13, 5, 3], [8, 6, -10], [-7, -11, -4], [-2, 3, -10], [1, 11, -7], [6, -12, 7], [10, 13, 4], [-2, 15, -13], [-7, 3, 5], [9, -8, 14], [5, -8, -11], [5, 10, 7], [-8, -10, 1], [13, 14, -9]]
+
+        # SAT wrong trace, acutally SAT 
+        self.full_trace_sat_wrong_trace = "-5 -8 4 0 -5 7 -4 0 7 5 4 0 4 8 -5 0 8 -5 4 0 -5 8 7 0 7 4 -8 0 7 5 8 0 -5 8 4 0 7 -5 8 0 -4 5 8 0 -7 -8 4 0 7 -5 -8 0 -5 -7 -8 0 -4 -8 -5 0 -5 -8 4 0 4 5 8 0 5 4 7 0 8 -4 7 0 -5 7 8 0 8 -5 -7 0 -5 4 7 0 4 5 7 0 7 4 8 0 -5 4 7 0 -4 -5 7 0 -7 -5 8 0 -4 -7 -8 0 7 4 5 0 5 4 7 0 -8 4 -5 0 4 -7 8 0 4 7 5 0 8 5 7 0 [SEP] ( 5 0 ( 8 0 4 0 ) ( -8 0 4 0 ) ) ( -5 0 ( 7 0 ( 4 0 8 0 ) ( -4 0 -8 0 ) ) ( -7 0 4 0 8 0 SAT"
+        self.trace_7 = "( 5 0 ( 8 0 4 0 ) ( -8 0 4 0 ) ) ( -5 0 ( 7 0 ( 4 0 8 0 ) ( -4 0 -8 0 ) ) ( -7 0 4 0 8 0"
+        self.formula_7 = [[-5, -8, 4], [-5, 7, -4], [7, 5, 4], [4, 8, -5], [8, -5, 4], [-5, 8, 7], [7, 4, -8], [7, 5, 8], [-5, 8, 4], [7, -5, 8], [-4, 5, 8], [-7, -8, 4], [7, -5, -8], [-5, -7, -8], [-4, -8, -5], [-5, -8, 4], [4, 5, 8], [5, 4, 7], [8, -4, 7], [-5, 7, 8], [8, -5, -7], [-5, 4, 7], [4, 5, 7], [7, 4, 8], [-5, 4, 7], [-4, -5, 7], [-7, -5, 8], [-4, -7, -8], [7, 4, 5], [5, 4, 7], [-8, 4, -5], [4, -7, 8], [4, 7, 5], [8, 5, 7]]
+        self.assignment_7 = [-5, -7, 4, 8]
 
 
 
@@ -111,13 +117,35 @@ class TestTraceVerify(unittest.TestCase):
         self.assertEqual(solve_sat(self.formula_6), "UNSAT")
     
     def test_verify_traces(self):
-        lines = [self.full_trace_sat_noback, self.full_trace_sat_back, self.full_trace_unsat, self.full_trace_sat_wrong, self.full_trace_sat_mal, self.full_trace_unsat_mal]
-        correct_sat, correct_unsat, total_sat, total_unsat, total = verify_traces(lines)
-        self.assertEqual(correct_sat, 2)
+        lines = [self.full_trace_sat_noback, 
+                 self.full_trace_sat_back, 
+                 self.full_trace_unsat, 
+                 self.full_trace_sat_wrong, 
+                 self.full_trace_sat_mal, 
+                 self.full_trace_unsat_mal,
+                 self.full_trace_sat_wrong_trace]
+        all_correct, correct_pred, correct_sat, correct_unsat, total_sat, total_unsat, total = verify_traces(lines)
+        self.assertEqual(all_correct, 3)
+        self.assertEqual(correct_pred, 5)
+        self.assertEqual(correct_sat, 3)
         self.assertEqual(correct_unsat, 1)
-        self.assertEqual(total_sat, 2)
+        self.assertEqual(total_sat, 3)
         self.assertEqual(total_unsat, 4)
-        self.assertEqual(total, 6)
+        self.assertEqual(total, 7)
+
+    def test_verify_all_steps(self):
+        self.assertTupleEqual((True, 6), verify_all_steps(self.formula_1, self.trace_1, "SAT"))
+        self.assertTupleEqual((True, 19), verify_all_steps(self.formula_2, self.trace_2, "SAT"))
+        # Incorrect Backtracking
+        self.assertTupleEqual((False, 6), verify_all_steps(self.formula_2, "( 5 0 ( 8 0 4 0 ) ( -8 0 4 0 ) ) ( -5 0 ( 7 0 ( 4 0 8 0 ) ( -4 0 -8 0 ) ) ( -7 0 4 0 8 0", "SAT"))
+        # Duplicate Decision
+        self.assertTupleEqual((False, 1), verify_all_steps(self.formula_2, "( 5 0 ( -5 0 4 0 ) ( -8 0 4 0 ) ) ( -5 0 ( 7 0 ( 4 0 8 0 ) ( -4 0 -8 0 ) ) ( -7 0 4 0 8 0", "SAT"))
+        # Incorrect Unit Propagation
+        self.assertTupleEqual((False, 5), verify_all_steps(self.formula_3, "( 2 0 ( 7 0 -5 0 8 0 4 0 -3 0 1 0 9 0 ) ( -7 0 -5 0 3 0 4 0 -9 0 ) ) ( -2 0 ( 9 0 3 0 7 0 6 0 -4 0 5 0 1 0 ) ( -9 0 -5 0 6 0 7 0 ) )", "UNSAT"))
+        self.assertTupleEqual((True, 29), verify_all_steps(self.formula_3, self.trace_3, "UNSAT"))
+        self.assertFalse(verify_all_steps(self.formula_4, self.trace_4, "SAT")[0])
+        self.assertFalse(verify_all_steps(self.formula_5, self.trace_5, "SAT")[0])
+        self.assertFalse(verify_all_steps(self.formula_6, self.trace_6, "UNSAT")[0])
 
 
 # This allows the test script to be run from the command line

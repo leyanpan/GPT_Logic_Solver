@@ -1,8 +1,10 @@
 import sys
-from pysat.solvers import Glucose3
+from pysat.solvers import Glucose4
 
-def extract_assignment(sequence):
+def extract_assignment_rup(sequence):
     stack = [[]]  # Start with an empty list to hold the successful sequence
+    rup = []
+
 
     # Helper function to parse numbers and control characters in the sequence
     def parse_number(i):
@@ -11,7 +13,7 @@ def extract_assignment(sequence):
             num += sequence[i]
             i += 1
         return num.strip(), i
-    sequence = sequence.strip(') ')
+    sequence = sequence.strip()
     i = 0
     while i < len(sequence):
         if sequence[i] == '(':
@@ -19,7 +21,10 @@ def extract_assignment(sequence):
             stack.append([])
         elif sequence[i] == ')':
             # End of a subsequence
-            subseq = stack.pop()
+            if not stack:
+                return None, None
+            rup.append([-subseq[0] for subseq in stack if subseq])
+            stack.pop()
         elif (sequence[i].isdigit() or sequence[i] == '-') and sequence[i] != '0':
             # Parse a number and add to the current subsequence
             num, i = parse_number(i)
@@ -28,24 +33,28 @@ def extract_assignment(sequence):
         i += 1
 
 
-    ret = []
+    assignment = []
     for subseq in stack:
         if len(subseq) > 0:
-            ret = ret + subseq
+            assignment = assignment + subseq
 
     # The remaining list in the stack is the successful sequence
-    return ret
+    return assignment, rup
 
 def is_valid_assignment(assignment):
     """
     Checks if an assignment is valid, i.e., it does not contain both x and -x for any x.
     """
+    if not assignment:
+        return False
     return all(-lit not in assignment for lit in assignment)
 
 def is_formula_satisfied(formula, assignment):
     """
     Checks if the given assignment satisfies the formula.
     """
+    if not assignment or not formula:
+        return False
     # Convert the assignment into a set for faster lookup.
     assignment_set = set(assignment)
     # Check each clause in the formula
@@ -77,10 +86,11 @@ def parse_dimacs_trace(line):
     
     if line.strip().endswith("UNSAT"):
         res = "UNSAT"
+        line = line[:-5].strip().replace('- ', '-')
     else:
         res = "SAT"
+        line = line[:-3].strip().replace('- ', '-')
     
-    line = line[:-4].replace('- ', '-')
     
     # Extract the formula and the trace from the line
     formula_part, trace_part = line.split("[SEP]")
@@ -116,8 +126,11 @@ def extract_conflict_clauses(trace):
 
     return conflict_clauses
 
+
 def verify_rup(formula, rup_proof):
-    g = Glucose3(bootstrap_with=formula)
+    if not rup_proof:
+        return False
+    g = Glucose4(bootstrap_with=formula)
     for clause in rup_proof:
         res, _ = g.propagate(assumptions=[-lit for lit in clause])
         if res:
@@ -128,6 +141,56 @@ def verify_rup(formula, rup_proof):
         return False
     return True
 
+def solve_sat(formula):
+    solver = Glucose4(bootstrap_with=formula)
+    correct_ans = solver.solve()
+    correct_ans = "SAT" if correct_ans else "UNSAT"
+    return correct_ans
+
+def verify_traces(lines):
+    """
+    Return the number of SAT formulas with correct assignments and UNSAT formulas with correct RUP proofs.
+    """
+    correct_sat = 0
+    correct_unsat = 0
+    total_sat = 0
+    total_unsat = 0
+    total = 0
+    cdcl = False
+    # Read the file and parse the formula and trace
+    for i, line in enumerate(lines):
+        total += 1
+        line = line[:line.index("SAT") + 3]
+        if not line.strip().endswith("SAT"):
+            continue
+        formula, trace, res = parse_dimacs_trace(line)
+        correct_ans = solve_sat(formula)
+        if correct_ans == "SAT":
+            total_sat += 1
+        if correct_ans == "UNSAT":
+            total_unsat += 1
+        if res != correct_ans:
+            continue
+        if res == "SAT":
+            assert formula is not None
+            assert trace is not None
+            # Parse the trace into a list of assignments
+            assignments, _ = extract_assignment_rup(trace)
+            # Check if the formula is satisfied by each assignment
+            if check_cnf_satisfiability(formula, assignments):
+                correct_sat += 1
+        if res == "UNSAT":
+            assert formula is not None
+            assert trace is not None
+            # Parse the trace into a list of assignments
+            if cdcl:
+                conflict_clauses = extract_conflict_clauses(trace)
+            else:
+                _, conflict_clauses = extract_assignment_rup(trace)
+            if verify_rup(formula, conflict_clauses):
+                correct_unsat += 1
+    
+    return correct_sat, correct_unsat, total_sat, total_unsat, total
 
 if __name__ == "__main__":
     # print(extract_conflict_clauses("( -1 ( -20 ( -19 ( -18 9 5 8 -17 15 -16 -4 -3 -2 11 -13 -10 -14 <CC> 18 19 1 </CC> ) 18 11 -12 16 6 -4 -2 -13 -3 -17 -9 7 <CC> 19 1 </CC> ) ) 19 ( -17 18 ( -2 -3 -12 8 15 -4 -5 6 7 -14 <CC> 2 17 -19 </CC> ) 2 -20 13 6 -4 -7 <CC> 17 1 </CC> ) 17 5 <CC> 1 </CC> ) 1 ( 17 ( 2 ( 5 ( 19 7 -8 16 18 10 <CC> -19 -5 </CC> ) -19 ( -8 -18 -9 13 7 <CC> 8 19 -17 </CC> ) 8 -12 -3 -16 6 -11 -4 <CC> -5 -2 -17 </CC> ) -5 -19 11 8 -12 16 14 6 -3 <CC> 5 -17 </CC> ) 5 -19 -2 8 -3 -6 -16 -11 18 7 12 -10 -14 -20 <CC> -17 </CC> ) -17 ( 8 -3 15 -4 ( -19 -13 ( 5 -16 11 18 10 -12 <CC> -5 19 -8 </CC> ) -5 11 -14 7 -12 <CC> 19 -8 </CC> ) 19 7 -5 18 2 16 -6 -14 <CC> -8 </CC> ) -8 -3 ( -5 -14 -19 11 -9 -12 -20 18 10 13 16 15 6 4 7 <CC> 5 </CC> ) 5 -19 -9 18 11 -12 -20 13 16 15 10 6 4 7 -14"))
@@ -136,40 +199,9 @@ if __name__ == "__main__":
         print("Usage: python3 trace_verify.py <file_name>")
         sys.exit(1)
     file_name = sys.argv[1]
-    correct_sat = 0
-    correct_unsat = 0
-    total_sat = 0
-    total_unsat = 0
-    total = 0
-    # Read the file and parse the formula and trace
     with open(file_name, "r") as f:
-        for line in f:
-            line = line[:line.index("SAT") + 3]
-            if not line.strip().endswith("SAT"):
-                total += 1
-                continue
-            formula, trace, res = parse_dimacs_trace(line)
-            if res == "SAT":
-                assert formula is not None
-                assert trace is not None
-                # Parse the trace into a list of assignments
-                assignments = extract_assignment(trace)
-                total_sat += 1
-                # Check if the formula is satisfied by each assignment
-                if check_cnf_satisfiability(formula, assignments):
-                    correct_sat += 1
-            if res == "UNSAT":
-                assert formula is not None
-                assert trace is not None
-                # Parse the trace into a list of assignments
-                conflict_clauses = extract_conflict_clauses(trace)
-                total_unsat += 1
-                if verify_rup(formula, conflict_clauses):
-                    correct_unsat += 1
-                
-
-            total += 1
-
+        lines = f.readlines()
+    correct_sat, correct_unsat, total_sat, total_unsat, total = verify_traces(lines)
     print(f"Correct: {correct_sat + correct_unsat}/{total} ({(correct_sat + correct_unsat) / total * 100:.2f}%)")
     print(f"Correct SAT: {correct_sat}/{total_sat} ({correct_sat / total_sat * 100:.2f}%)")
     print(f"Correct UNSAT: {correct_unsat}/{total_unsat} ({correct_unsat / total_unsat * 100:.2f}%)")

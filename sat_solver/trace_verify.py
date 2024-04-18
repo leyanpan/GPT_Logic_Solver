@@ -56,6 +56,8 @@ def verify_all_steps(formula, trace, res):
                 return False, correct_steps
             seq = stack.pop()
             decision = decisions.pop()
+            if not stack:
+                return False, correct_steps
             if len(decision[1]) == 2 and decision[1][0] == -decision[1][1]:
                 continue
             # Only allow backtrack if there is a conflict i.e. empty clause
@@ -144,7 +146,8 @@ def parse_dimacs_trace(line):
     
     
     # Extract the formula and the trace from the line
-    formula_part, trace_part = line.split("[SEP]")
+    parts = line.split("[SEP]")
+    formula_part, trace_part = parts[0], " ".join(part.strip() for part in parts[1:])
     
     # Parse the formula into a list of lists
     formula = [list(map(int, clause.split())) for clause in formula_part.strip().split(" 0")[:-1]]
@@ -183,6 +186,8 @@ def verify_rup(formula, rup_proof):
         return False
     formula = formula.copy()
     max_id = max([abs(lit) for clause in formula for lit in clause])
+    if any([lit > max_id for clause in rup_proof for lit in clause]):
+        return False
     tracer = AssignTrace()
     assignment = [None] * (max_id + 1)
     res, formula, _ = bcp(formula, assignment, tracer)

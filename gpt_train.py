@@ -152,7 +152,10 @@ trainer = SATHFTrainer(model=model,
                         )
 
 # Train the model
-trainer.train()
+if load_model:
+    trainer.train(resume_from_checkpoint=load_model)
+else:
+    trainer.train()
 
 # Save the final model and tokenizer
 model.save_pretrained(out_dir)

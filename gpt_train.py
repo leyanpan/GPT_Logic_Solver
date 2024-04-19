@@ -41,6 +41,7 @@ rand_pos = True
 perm_vars = True
 load_model = None
 old_tokenizer = False
+state_trace = False
 mask_formula = True
 model = "gpt2"
 ##################
@@ -60,6 +61,8 @@ if append_timestamp:
 
 if old_tokenizer:
     custom_tokens = [str(i) for i in range(30 + 1)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
+elif state_trace:
+    custom_tokens = [str(i) for i in range(30 + 1)] + [str(-i) for i in range(1, 30 + 1)] + ["[SEP]", "SAT", "UNSAT", "[EOS]","|", "Decide", "UP", "D", "BackTrack", "[UNK]"]
 else:
     custom_tokens = [str(i) for i in range(30 + 1)] + [str(-i) for i in range(1, 30 + 1)] + ["[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
 

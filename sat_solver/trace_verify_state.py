@@ -1,7 +1,4 @@
-import sys
 from pysat.solvers import Glucose4
-from dpll import update_formula, bcp
-from AssignTrace import AssignTraceState
 
 class TraceAbstract:
     def __init__(self, raw_trace):

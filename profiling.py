@@ -1,6 +1,6 @@
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split
-from torch.profiler import profile, record_function, ProfilerActivity
+from torch.profiler import profile, record_function, ProfilerActivity, tensorboard_trace_handler
 
 from transformers import (AutoModel,
                           GPT2Config,
@@ -42,12 +42,13 @@ rand_pos = True
 perm_vars = True
 load_model = None
 old_tokenizer = False
-state_trace = False
 mask_formula = True
 model = "gpt2"
 ##################
 
 exec(open('configurator.py').read())
+
+epochs = 3
 
 utils.debug = debug
 if debug:
@@ -62,8 +63,6 @@ if append_timestamp:
 
 if old_tokenizer:
     custom_tokens = [str(i) for i in range(30 + 1)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
-elif state_trace:
-    custom_tokens = [str(i) for i in range(30 + 1)] + [str(-i) for i in range(1, 30 + 1)] + ["[SEP]", "SAT", "UNSAT", "[EOS]","|", "Decide", "UP", "D", "BackTrack", "[UNK]"]
 else:
     custom_tokens = [str(i) for i in range(30 + 1)] + [str(-i) for i in range(1, 30 + 1)] + ["[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
 
@@ -117,7 +116,7 @@ else:
 
 
 # Load dataset
-dataset_path = get_dataset_path(dataset)
+dataset_path = get_dataset_path(dataset, "test")
 dataset = SATDataset(file_path=dataset_path,
                     tokenizer=tokenizer,
                     max_id=max_id,
@@ -158,11 +157,12 @@ trainer = SATHFTrainer(model=model,
                          eval_dataset=val_dataset,
                         )
 
-# Train the model
-if load_model:
-    trainer.train(resume_from_checkpoint=load_model)
-else:
+with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+              record_shapes=True,
+              on_trace_ready=tensorboard_trace_handler("./result")) as prof:
+    # Train the model
     trainer.train()
+
 
 # Save the final model and tokenizer
 model.save_pretrained(out_dir)

@@ -1,5 +1,6 @@
 from pysat.solvers import Glucose4
 
+
 class TraceAbstract:
     def __init__(self, raw_trace):
         # SAT is action, UNSAT is state (currently -- should fix); action
@@ -9,7 +10,10 @@ class TraceAbstract:
         parts = raw_trace.split("[SEP]")
         self.raw_formula, trace = [x.strip() for x in parts]
 
-        self.formula = [list(map(int, clause.split())) for clause in self.raw_formula.strip().split(" 0")[:-1]]
+        self.formula = [
+            list(map(int, clause.split()))
+            for clause in self.raw_formula.strip().split(" 0")[:-1]
+        ]
 
         steps = trace.split("|")
 
@@ -45,14 +49,13 @@ class TraceAbstract:
         else:
             return "-" + symbol
 
-
-    ### These methods apply a given action to a given state, and return the 
-    ### expected resultant state; they're used for local verification of state 
+    ### These methods apply a given action to a given state, and return the
+    ### expected resultant state; they're used for local verification of state
     ### transitions.
 
     def Decide(self, curr_state, arg):
         return curr_state + self.to_prepend(curr_state) + f"D {arg}"
-    
+
     def UP(self, curr_state, arg):
         return curr_state + self.to_prepend(curr_state) + f"{arg}"
 
@@ -68,7 +71,7 @@ class TraceAbstract:
             return curr_state[:pos] + arg
 
     ### -----------------------------------------------------------------------
-    
+
     def get_assignment(self):
         """
         Get the assignment from the last state
@@ -123,12 +126,12 @@ class TraceAbstract:
         """
 
         transitions = self.actions[:-1]
-        
+
         for i in range(len(transitions)):
             action, arg = self.parse_action(transitions[i])
 
             cur_state = self.states[i]
-            next_state_encountered = self.states[i+1]
+            next_state_encountered = self.states[i + 1]
             next_state_expected = eval(f"self.{action}(cur_state, arg)")
 
             if next_state_expected != next_state_encountered:
@@ -139,8 +142,9 @@ class TraceAbstract:
                     print(f"Encountered state: {next_state_encountered}")
 
                 return False
-        
+
         return True
+
 
 def verify_traces(lines):
     correct_pred = 0  # number of correct predictions
@@ -171,11 +175,19 @@ def verify_traces(lines):
             correct_sat += 1
         if correct_ans == "UNSAT":
             correct_unsat += 1
-        
+
         if trace.oll_korrekt():
             all_correct += 1
 
-    return correct_pred, correct_sat, correct_unsat, all_correct, total_sat, total_unsat, total
+    return (
+        correct_pred,
+        correct_sat,
+        correct_unsat,
+        all_correct,
+        total_sat,
+        total_unsat,
+        total,
+    )
 
 
 if __name__ == "__main__":
@@ -188,9 +200,19 @@ if __name__ == "__main__":
     with open(file_name, "r") as f:
         lines = f.readlines()
 
-    correct_pred, correct_sat, correct_unsat, all_correct, total_sat, total_unsat, total = verify_traces(lines)
+    correct_pred, correct_sat, correct_unsat, all_correct, total_sat, total_unsat, total = verify_traces(
+        lines
+    )
 
-    print(f"Total Fully Correct: {all_correct}/{total} ({all_correct / total * 100:.2f}%)")
-    print(f"SAT/UNSAT Correct: {correct_pred}/{total} ({correct_pred / total * 100:.2f}%)")
-    print(f"Correct SAT: {correct_sat}/{total_sat} ({correct_sat / total_sat * 100:.2f}%)")
-    print(f"Correct UNSAT: {correct_unsat}/{total_unsat} ({correct_unsat / total_unsat * 100:.2f}%)")
+    print(
+        f"Total Fully Correct: {all_correct}/{total} ({all_correct / total * 100:.2f}%)"
+    )
+    print(
+        f"SAT/UNSAT Correct: {correct_pred}/{total} ({correct_pred / total * 100:.2f}%)"
+    )
+    print(
+        f"Correct SAT: {correct_sat}/{total_sat} ({correct_sat / total_sat * 100:.2f}%)"
+    )
+    print(
+        f"Correct UNSAT: {correct_unsat}/{total_unsat} ({correct_unsat / total_unsat * 100:.2f}%)"
+    )

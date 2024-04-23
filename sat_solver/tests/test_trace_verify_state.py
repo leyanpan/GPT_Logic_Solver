@@ -8,6 +8,7 @@ if __name__ == "__main__":
     example_incorrect_trace_2 = "5 -1 -3 0 -3 4 5 0 3 1 -5 0 -4 6 -3 0 -6 -2 1 0 2 -6 3 0 -4 -2 3 0 -4 -2 -1 0 -6 4 1 0 6 -4 -3 0 4 1 -2 0 2 -4 3 0 -2 -1 -6 0 4 6 3 0 5 6 4 0 3 -6 4 0 -1 -6 -2 0 5 -6 -2 0 -6 -3 -2 0 -1 -2 -4 0 4 3 -6 0 5 6 -3 0 3 1 4 0 4 -6 -5 0 [SEP] | Decide 4 | D 4 | Decide 2 | D 4 D 2 | UP 3 | D 4 D 2 3 | UP 6 | D 4 D 2 3 1 | Now is the winter of our discontent made glorious summer by this son of York. | D 4 -2 3 6 | Decide 5 | D 4 -2 3 6 D 5 | Røten nik Akten Di | D 4 -2 3 6 D 5 | Wi nøt trei a høliday in Sweden this yër ? | MY CURRENT STATE IS THAT I AM BOTHERED | See the løveli lakes | Gruntled. | Far out in the uncharted backwaters of the unfashionable end of the western spiral arm of the galaxy lies a small, unregarded, yellow sun.  Orbiting this at a distance of roughly 93 million miles is an insignificant little blue-green planet whose ape-decended inhabitants are so amazingly primitive that they still think ChatGPT is a pretty neat idea. | Dead. | SAT"
 
     trace = TraceAbstract(example_line_sat)
+    trace_unsat = TraceAbstract(example_line_unsat)
     trace_incorrect = TraceAbstract(example_incorrect_trace)
 
     print(f"Raw formula: {trace.raw_formula}")
@@ -53,10 +54,17 @@ if __name__ == "__main__":
 
     print("\n\n")
 
+    print("SAT: ")
     print(f"Assignment: {trace.get_assignment()}")
     print(f"Valid assignment: {trace.is_valid_assignment()}")
     print(f"Formula satisfied: {trace.is_formula_satisfied()}")
     print(f"Solve SAT / correct answer: {trace.solve_sat()}")
+
+    print("\nUNSAT: ")
+    print(f"Assignment: {trace_unsat.get_assignment()}")
+    print(f"Valid assignment: {trace_unsat.is_valid_assignment()}")
+    print(f"Formula satisfied: {trace_unsat.is_formula_satisfied()}")
+    print(f"Solve SAT / correct answer: {trace_unsat.solve_sat()}")
 
     print("\n\n")
 
@@ -64,6 +72,8 @@ if __name__ == "__main__":
 
     print(f"Is korrekt trace korrekt: {trace.oll_korrekt()}")
     print(f"Is unkorrekt trace korrekt: {trace_incorrect.oll_korrekt()}")
+
+    print("\n\ntotal eval:")
 
     # test a bunch
     correct_pred, correct_sat, correct_unsat, all_correct, total_sat, total_unsat, total = verify_traces(

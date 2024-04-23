@@ -1,5 +1,7 @@
+import sys
+import trace_verify
 from pysat.solvers import Glucose4
-
+# from trace_verify import is_valid_assignment, is_formula_satisfied
 
 class TraceAbstract:
     def __init__(self, raw_trace):
@@ -84,10 +86,7 @@ class TraceAbstract:
         Checks if an assignment is valid, i.e., it does not contain both x and -x for any x.
         """
         assignment = self.get_assignment()
-
-        if not assignment:
-            return False
-        return all(-lit not in assignment for lit in assignment)
+        return trace_verify.is_valid_assignment(assignment)
 
     def is_formula_satisfied(self):
         """
@@ -96,17 +95,7 @@ class TraceAbstract:
         assignment = self.get_assignment()
         formula = self.formula
 
-        if not assignment or not formula:
-            return False
-        # Convert the assignment into a set for faster lookup.
-        assignment_set = set(assignment)
-        # Check each clause in the formula
-        for clause in formula:
-            # If none of the literals in the clause is satisfied by the assignment, the formula is not satisfied.
-            if not any(lit in assignment_set for lit in clause):
-                return False
-        # If all clauses are satisfied, the formula is satisfied.
-        return True
+        return trace_verify.is_formula_satisfied(formula, assignment)
 
     def solve_sat(self):
         """

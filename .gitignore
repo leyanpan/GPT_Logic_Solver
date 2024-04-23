@@ -26,5 +26,7 @@ figures/
 temp/
 datasets/SAT_var_eval/*.txt
 results/
+sat_solver/datasets
+outputs/
 
 environment-dev.yml

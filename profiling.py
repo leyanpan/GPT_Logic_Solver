@@ -1,6 +1,6 @@
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split
-from torch.profiler import profile, record_function, ProfilerActivity, tensorboard_trace_handler
+from torch.profiler import profile, record_function, ProfilerActivity, tensorboard_trace_handler, schedule
 
 from transformers import (AutoModel,
                           GPT2Config,
@@ -146,7 +146,7 @@ training_args = TrainingArguments(
     load_best_model_at_end=True,
     metric_for_best_model="loss",
     greater_is_better=False,
-    report_to="wandb" if use_wandb else "none",
+    report_to="tensorboard",
     run_name=os.path.basename(out_dir)
 )
 
@@ -157,11 +157,21 @@ trainer = SATHFTrainer(model=model,
                          eval_dataset=val_dataset,
                         )
 
-with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-              record_shapes=True,
-              on_trace_ready=tensorboard_trace_handler("./result")) as prof:
+# Define the profiler schedule
+sched = schedule(wait=1, warmup=1, active=3, repeat=2)
+
+# Start the profiler
+with profile(
+    activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+    schedule=sched,
+    on_trace_ready=tensorboard_trace_handler(os.path.join(training_args.logging_dir, "profiler")),
+    record_shapes=True,
+    profile_memory=True,
+    with_stack=True
+) as prof:
     # Train the model
     trainer.train()
+    prof.step()
 
 
 # Save the final model and tokenizer

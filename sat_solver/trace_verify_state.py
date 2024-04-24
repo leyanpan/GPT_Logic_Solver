@@ -1,7 +1,6 @@
 import sys
 import trace_verify
 from pysat.solvers import Glucose4
-# from trace_verify import is_valid_assignment, is_formula_satisfied
 
 class TraceAbstract:
     def __init__(self, raw_trace):
@@ -101,12 +100,8 @@ class TraceAbstract:
         """
         Solve the formula using a SAT solver.
         """
-        solver = Glucose4(bootstrap_with=self.formula)
-        correct_ans = solver.solve()
-        solver.delete()
 
-        correct_ans = "SAT" if correct_ans else "UNSAT"
-        return correct_ans
+        return trace_verify.solve_sat(self.formula)
 
     def oll_korrekt(self, verbose=False):
         """

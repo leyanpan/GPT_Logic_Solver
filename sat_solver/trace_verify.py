@@ -215,6 +215,8 @@ def verify_rup(formula, rup_proof):
 def solve_sat(formula):
     solver = Glucose4(bootstrap_with=formula)
     correct_ans = solver.solve()
+    solver.delete()  # don't wait for garbage collection when running batches of problems
+
     correct_ans = "SAT" if correct_ans else "UNSAT"
     return correct_ans
 

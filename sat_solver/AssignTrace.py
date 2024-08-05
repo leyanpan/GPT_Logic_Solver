@@ -51,7 +51,7 @@ class AssignTrace:
 
     def __str__(self):
         return ""
-    
+
     def get_count(self):
         self.counter += 1
         return self.counter
@@ -113,8 +113,63 @@ class AssignTraceDPLL(AssignTrace):
     def __str__(self):
         return " ".join(self.tokens)
 
-
 class AssignTraceState(AssignTrace):
+    def __init__(self, clauses, proof_clause=False):
+        self.tokens = []
+        self.clauses = clauses
+        self.state = []
+        self.assignment = None
+        self.proof_clause = proof_clause
+        super().__init__()
+
+    def active_assign(self, assignment, var):
+        self.state.append(f"D {var}")
+        self.tokens += self.state + ["[UP]"]
+        super().active_assign(assignment, var)
+        self.assignment = assignment
+
+    def passive_assign(self, assignment, var):
+        self.state.append(f"{var}")
+        super().passive_assign(assignment, var)
+        self.assignment = assignment
+
+    def sat(self):
+        self.tokens += self.state
+        super().sat()
+
+    def unsat(self):
+        cont_clause = None
+        for clause in self.clauses:
+            is_cont_clause = True
+            for cvar in clause:
+                if self.assignment[abs(cvar)] == None or self.assignment[abs(cvar)] == (cvar > 0):
+                    is_cont_clause = False
+                    break
+            if is_cont_clause:
+                cont_clause = clause
+                break
+        assert cont_clause, "No contradicting clause found"
+        # Find last decision in self.state and remove all unit propagations after that
+        bvar = None
+        for i in range(len(self.state) - 1, -1, -1):
+            if self.state[i][0] == "D":
+                bvar = int(self.state[i][2:])
+                break
+        self.tokens += self.state
+        if bvar is not None:
+            self.tokens += ["[BT]"]
+            remove = [abs(int(v)) for v in self.state[i + 1:]]
+            for r in remove:
+                self.assignment[r] = None
+            self.state = self.state[:i] + [str(-bvar)]
+            self.assignment[abs(bvar)] = not (bvar > 0)
+            # self.tokens += self.state + ["|"]
+        super().unsat()
+
+    def __str__(self):
+        return " ".join(self.tokens)
+
+class AssignTraceStateComplex(AssignTrace):
     def __init__(self, clauses, proof_clause=False):
         self.tokens = ["|"]
         self.clauses = clauses
@@ -213,7 +268,7 @@ class AssignTraceCDCL(AssignTrace):
                     self.mapping[var] = []
                 self.mapping[var].append(i)
         super().__init__()
-        
+
     def add_clause(self, clause):
         self.clauses.append(clause)
         self.tokens += ["<CC>"] # Conflict Clause
@@ -226,12 +281,12 @@ class AssignTraceCDCL(AssignTrace):
                 # only runs if bcp_polarity is not turned on
                 self.mapping[var] = []
             self.mapping[var].append(len(self.clauses) - 1)
-        
+
         for var in clause:
             if var in self.assigned and self.assigned[var]:
                 self.clauses[-1] = []
                 break
-    
+
     def active_assign(self, var):
         assert(not self.is_assigned(var))
         self.tokens += ["(", str(var)]
@@ -270,7 +325,7 @@ class AssignTraceCDCL(AssignTrace):
                 del self.decision_levels[abs(var)]
             if abs(var) in self.implication_graph:
                 del self.implication_graph[abs(var)]
-            
+
             # repopulate clauses
             total = self.mapping.get(var, []) + self.mapping.get(-var, [])
             for idx in total:
@@ -296,10 +351,10 @@ class AssignTraceCDCL(AssignTrace):
         else:
             assert -cvar in self.assigned and self.assigned[-cvar]
             return -cvar
-        
+
     def get_decision_level(self, var):
         return self.decision_levels.get(abs(var), -1)
-    
+
     def sat(self):
         self.tokens += [")"] * self.parentheses
         super().sat()
@@ -330,6 +385,6 @@ class BCPTrace(AssignTrace):
 
     def index(self, var):
         return var + self.num_vars
-    
+
     def var(self, i):
         return i - self.num_vars

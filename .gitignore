@@ -29,4 +29,7 @@ results/
 sat_solver/datasets
 outputs/
 
+sat_solver/datasets
+sat_solver/outputs
+
 environment-dev.yml

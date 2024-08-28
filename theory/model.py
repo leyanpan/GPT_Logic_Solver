@@ -260,6 +260,9 @@ class TransformerModel(nn.Module):
             # Convert the current tokens to IDs
             input_ids = torch.tensor([self.token_to_id[token] for token in generated_tokens], dtype=torch.long).unsqueeze(0)
 
+            if torch.cuda.is_available():
+                input_ids = input_ids.cuda()
+
             # Apply the model to get the logits
             logits = self.forward(input_ids)
 

@@ -112,7 +112,11 @@ class TraceAbstract:
         transitions = self.actions[:-1]
 
         for i in range(len(transitions)):
-            action, arg = self.parse_action(transitions[i])
+            try:
+                action, arg = self.parse_action(transitions[i])
+            except:
+                print(f"Error parsing action: {transitions[i]}")
+                return False
 
             cur_state = self.states[i]
             next_state_encountered = self.states[i + 1]
@@ -156,7 +160,11 @@ def verify_traces(lines):
         correct_pred += 1
 
         if correct_ans == "SAT":
-            correct_sat += 1
+            assignment = trace.get_assignment()
+            if trace_verify.is_valid_assignment(assignment) and trace_verify.is_formula_satisfied(
+                trace.formula, assignment
+            ):
+                correct_sat += 1
         if correct_ans == "UNSAT":
             correct_unsat += 1
 

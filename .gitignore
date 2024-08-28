@@ -28,6 +28,7 @@ datasets/SAT_var_eval/*.txt
 results/
 sat_solver/datasets
 outputs/
+result/
 
 sat_solver/datasets
 sat_solver/outputs

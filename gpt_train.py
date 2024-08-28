@@ -60,6 +60,9 @@ if dataset is None:
 if append_timestamp:
     out_dir += f"-{time.strftime('%Y%m%d-%H%M%S')}"
 
+if debug:
+    out_dir = "temp"
+
 if old_tokenizer:
     custom_tokens = [str(i) for i in range(30 + 1)] + ["-", "[SEP]", "SAT", "UNSAT", "[EOS]", "[UNK]", "(", ")"]
 elif state_trace:

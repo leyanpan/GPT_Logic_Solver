@@ -49,4 +49,10 @@ python eval.py --dataset=[Dataset Path] --model_dir=[Your downloaded Model Folde
 ```
 Note that the evaluation of a single sample is much slower than training because the model needs to incrementally generate each token and does not use batches (TODO: use batches using eval). Therefore, `num_samples` is typically set to 100 for initial evaluation.
 
+## Running on Multi-GPUs
+```
+accelerate config
+accelerate launch gpt_train.py configs/train_config_ss.py
+```
+
 

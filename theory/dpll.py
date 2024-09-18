@@ -57,7 +57,7 @@ def nearest_token_orig(tok_emb: OneHotTokEmb, vocab: List[str], targets: List[st
     return Copy(nearest_token_q, nearest_token_k, Concat(new_v), bos_weight=1, exactness=mean_exactness, max_id=max_id, indices=indices)
 
 
-use_new = False
+use_new = True
 nearest_token = nearest_token_new if use_new else nearest_token_orig
 
 
@@ -80,89 +80,109 @@ def t(encodings: SOp, num_vars, true_vec=(1, 0), false_vec=(0, 1), none_vec=(0, 
     return Linear([encodings, ones], np.hstack([mat.T, bias.reshape((-1, 1))]))
 
 
-def dpll(num_vars, num_clauses, context_len, mean_exactness=10, nonsep_penalty=10, return_logs=False) -> Tuple[SOp, List, Dict[str, SOp]]:
+def dpll(num_vars, num_clauses, context_len, mean_exactness=10, nonsep_penalty=10, return_logs=False) -> Tuple[
+    SOp, List, Dict[str, SOp]]:
     vocab: List = ([str(i) for i in range(1, num_vars + 1)]
                    + [str(-i) for i in range(1, num_vars + 1)]
                    + ['0', '[SEP]', '[UP]', '[BT]', '[BOS]', 'D', 'SAT', 'UNSAT'])
     idx: Dict[str, int] = {token: idx for idx, token in enumerate(vocab)}
     sop_logs: Dict[str, SOp] = {}
+    sops.config["mean_exactness"] = mean_exactness
     # Initialize Base SOps
-    tok_emb = OneHotTokEmb(idx)
+    tok_emb = OneHotTokEmb(idx).named("tok_emb")
 
     nearest_sep = nearest_token(tok_emb=tok_emb,
                                 vocab=vocab,
                                 targets=['0', '[SEP]', '[UP]', '[BT]'],
-                                v=[indices, 'target'], mean_exactness=mean_exactness, max_id=context_len)
+                                v=[indices, 'target'], mean_exactness=mean_exactness, max_id=context_len).named(
+        "nearest_sep")
 
     p_i_sep_p, b_0, b_SEP, b_UP, b_BackTrack = (
-        nearest_sep[:, 0], nearest_sep[:, 1], nearest_sep[:, 2], nearest_sep[:, 3], nearest_sep[:, 4])
+        nearest_sep[:, 0].named("p_i_sep_p"),
+        nearest_sep[:, 1].named("b_0"),
+        nearest_sep[:, 2].named("b_SEP"),
+        nearest_sep[:, 3].named("b_UP"),
+        nearest_sep[:, 4].named("b_BackTrack"))
 
-    p_i_D = nearest_token(tok_emb=tok_emb, vocab=vocab, targets=['D'], v=indices, mean_exactness=mean_exactness, max_id=context_len)
-    prev_pos = Id([p_i_sep_p, tok_emb[:, idx['D']]])[indices - 1]
-    p_i_sep, b_decision = prev_pos[:, 0] - is_bos, prev_pos[:, 1]
+    p_i_D = nearest_token(tok_emb=tok_emb, vocab=vocab, targets=['D'], v=indices, mean_exactness=mean_exactness,
+                          max_id=context_len).named("p_i_D")
+    prev_pos = Id([p_i_sep_p, tok_emb[:, idx['D']]])[indices - 1].named("prev_pos")
+    p_i_sep, b_decision = prev_pos[:, 0].named("p_i_sep"), prev_pos[:, 1].named("b_decision")
 
-    d_i_sep = indices - p_i_sep_p
+    d_i_sep = (indices - p_i_sep_p).named("d_i_sep")
 
-    p_i_sep_2 = p_i_sep * p_i_sep
-    e_vars = tok_emb[:, : 2 * num_vars]
+    p_i_sep_2 = (p_i_sep * p_i_sep).named("p_i_sep_2")
+    e_vars = tok_emb[:, : 2 * num_vars].named("e_vars")
     r_i_pre = Mean(q_sops=[p_i_sep_2, p_i_sep, ones],
                    k_sops=[-ones, 2 * p_i_sep, -p_i_sep_2],
-                   v_sops=e_vars)
-    r_i = r_i_pre * (indices - p_i_sep)
+                   v_sops=e_vars, exactness=mean_exactness).named("r_i_pre")
+    r_i = (r_i_pre * (indices - p_i_sep)).named("r_i")
 
-    p_i_sep_min = p_i_sep[p_i_sep_p]
+    p_i_sep_min = p_i_sep[p_i_sep_p].named("p_i_sep_min")
 
-    p_i_min = p_i_sep_min + d_i_sep + 4 * b_SEP
+    p_i_min = (p_i_sep_min + d_i_sep + 4 * b_SEP).named("p_i_min")
 
-    p_i_D_min = p_i_D[p_i_sep_p]
+    p_i_D_min = p_i_D[p_i_sep_p].named("p_i_D_min")
 
-    b_exceed = p_i_min > (p_i_D_min + 1)
+    b_exceed = (p_i_min > (p_i_D_min + 1)).named("b_exceed")
 
-    b_D_min = (p_i_D_min == p_i_min + 1)
+    b_D_min = (p_i_D_min == p_i_min + 1).named("b_D_min")
 
     sat_q = [r_i, ones]
-    # -0.5 if the token is 0, -M otherwise
     sat_k = [-r_i, (-nonsep_penalty) * (1 - tok_emb[:, idx['0']])]
     sat_v = is_bos
-    b_sat = Mean(sat_q, sat_k, sat_v, bos_weight=nonsep_penalty - 0.5, exactness=mean_exactness) > 0
+    b_sat = (Mean(sat_q, sat_k, sat_v, bos_weight=nonsep_penalty - 0.5, exactness=mean_exactness) > 0).named("b_sat")
 
     unsat_q = [t(r_i, num_vars, true_vec=(1, 0), false_vec=(0, 1), none_vec=(1, 1)), ones]
     unsat_k = sat_k
     unsat_v = 1 - is_bos
-    b_cont = Mean(unsat_q, unsat_k, unsat_v, bos_weight=nonsep_penalty - 0.5, exactness=mean_exactness) > 0
-    b_copy_p = p_i_min < (p_i_sep_p - 1)
+    b_cont = (Mean(unsat_q, unsat_k, unsat_v, bos_weight=nonsep_penalty - 0.5, exactness=mean_exactness) > 0).named(
+        "b_cont")
+    b_copy_p = (p_i_min < (p_i_sep_p - 1)).named("b_copy_p")
 
-    up_q = [t(r_i, num_vars, true_vec=(0, 1), false_vec=(1, 0), none_vec=(0, 0)), ones]
-    up_k = [r_i, (-nonsep_penalty) * (1 - tok_emb[:, idx['0']])]
-    up_v = num_clauses * r_i
-    o_up = Mean(up_q, up_k, up_v, bos_weight=nonsep_penalty + 1.5, exactness=mean_exactness)
-    # e_up = (o_up > 0) - t(r_i, num_vars, true_vec=(1, 1), false_vec=(1, 1), none_vec=(0, 0))
-    e_up = GLUMLP(act_sops=(o_up - t(r_i, num_vars, true_vec=(1, 1), false_vec=(1, 1), none_vec=(0, 0)))) - GLUMLP(
-        act_sops=(o_up - 1))
-    b_final = b_exceed & b_decision
-    b_no_decision = p_i_D <= p_i_sep
-    b_BT_finish = (p_i_D_min <= p_i_min) & b_BackTrack
-    e_BT = t(e_vars[p_i_D_min + 1], num_vars=num_vars, true_vec=(0, 1), false_vec=(1, 0), none_vec=(0, 0))
-    p_i_min_index = p_i_min + 1
-    e_copy = tok_emb[p_i_min_index]
-    b_unsat = b_no_decision & b_cont
-    b_backtrack = b_D_min & b_BackTrack
-    b_copy = b_copy_p & (1 - b_BT_finish)
-    b_BT_token = b_cont & (1 - tok_emb[:, idx['[BT]']])
-    b_not_D = 1 - tok_emb[:, idx['D']]
-    e_unassigned = t(r_i, num_vars, true_vec=(0, 0), false_vec=(0, 0), none_vec=(1, 1))
+    orig_up_impl = True
+    if orig_up_impl:
+        up_q = [t(r_i, num_vars, true_vec=(0, 1), false_vec=(1, 0), none_vec=(0, 0)), ones]
+        up_k = [r_i, (-nonsep_penalty) * (1 - tok_emb[:, idx['0']])]
+        up_v = num_clauses * r_i
+        o_up = Mean(up_q, up_k, up_v, bos_weight=nonsep_penalty + 1.5, exactness=mean_exactness).named("o_up")
+    else:
+        up_q = unsat_q
+        up_k = unsat_k
+        up_v = num_clauses * r_i
+        o_up = Mean(up_q, up_k, up_v, bos_weight=nonsep_penalty - 1.5, exactness=mean_exactness).named("o_up")
+    e_up = (GLUMLP(act_sops=(o_up - t(r_i, num_vars, true_vec=(1, 1), false_vec=(1, 1), none_vec=(0, 0))))
+            - GLUMLP(act_sops=(o_up - 1))).named("e_up")
 
-    out = CPOutput(len(vocab), [(b_sat, idx['SAT'], 13),
-                                (b_unsat, idx['UNSAT'], 12),
-                                (b_BT_token, idx['[BT]'], 11),
-                                (b_final, idx['[UP]'], 10),
-                                (b_backtrack, Pad(e_BT, len(vocab), idx['1']), 9),
-                                (b_copy, e_copy, 5),
-                                (None, Pad(e_up, len(vocab), idx['1']), 3),
-                                (b_not_D, idx['D'], 2),
-                                (None, Pad(e_unassigned,
+    heuristic_q = [t(r_i, num_vars, true_vec=(-10, 1), false_vec=(1, -10), none_vec=(0, 0)), ones]
+    heuristic_k = up_k
+    heuristic_v = r_i
+    heuristic_o = SelfAttention(heuristic_q, heuristic_k, heuristic_v).named("heuristic_o")
+
+    b_final = (b_exceed & b_decision).named("b_final")
+    b_no_decision = (p_i_D <= p_i_sep).named("b_no_decision")
+    b_BT_finish = ((p_i_D_min <= p_i_min) & b_BackTrack).named("b_BT_finish")
+    e_BT = t(e_vars[p_i_D_min + 1], num_vars=num_vars, true_vec=(0, 1), false_vec=(1, 0), none_vec=(0, 0)).named("e_BT")
+    p_i_min_index = (p_i_min + 1).named("p_i_min_index")
+    e_copy = tok_emb[p_i_min_index].named("e_copy")
+    b_unsat = (b_no_decision & b_cont).named("b_unsat")
+    b_backtrack = (b_D_min & b_BackTrack).named("b_backtrack")
+    b_copy = (b_copy_p & (1 - b_BT_finish)).named("b_copy")
+    b_BT_token = (b_cont & (1 - tok_emb[:, idx['[BT]']])).named("b_BT_token")
+    b_not_D = (1 - tok_emb[:, idx['D']]).named("b_not_D")
+    e_unassigned = t(r_i, num_vars, true_vec=(0, 0), false_vec=(0, 0), none_vec=(1, 1)).named("e_unassigned")
+
+    out = CPOutput(len(vocab), [(b_sat, idx['SAT'], 16),
+                                (b_unsat, idx['UNSAT'], 15),
+                                (b_BT_token, idx['[BT]'], 14),
+                                #(b_final, idx['[UP]'], 13),
+                                (b_backtrack, Pad(e_BT, len(vocab), idx['1']), 12),
+                                (b_copy, e_copy, 6),
+                                (None, Pad(e_up, len(vocab), idx['1']), 4),
+                                (b_not_D, idx['D'], 3),
+                                (None, Pad(e_unassigned + heuristic_o,
                                            out_dim=len(vocab), start_dim=idx['1']), 1)
-                                ])
+                                ]).named("out")
 
     sop_logs = {
         "tok_emb": tok_emb,
@@ -203,6 +223,7 @@ def dpll(num_vars, num_clauses, context_len, mean_exactness=10, nonsep_penalty=1
         "b_BT_token": b_BT_token,
         "b_not_D": b_not_D,
         "e_unassigned": e_unassigned,
+        "out": out
     }
 
     return out, vocab, sop_logs

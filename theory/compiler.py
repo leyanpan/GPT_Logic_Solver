@@ -103,7 +103,7 @@ def flatten_all_linear(sop: SOp) -> SOp:
     return sop
 
 
-def compile_model(out_sop: SOp, vocab: List[str], max_seq_len: int, min_mlp_dim=5, min_head_dim=5) -> TransformerModel:
+def compile_model(out_sop: SOp, vocab: List[str], max_seq_len: int, min_mlp_dim=5, min_head_dim=5, return_alloc=False) -> TransformerModel | Tuple[TransformerModel, Dict, SOp]:
     # Since we need an unembedding matrix, the last SOp must be Linear
     if not isinstance(out_sop, Linear):
         out_sop = Id(out_sop)
@@ -247,5 +247,7 @@ def compile_model(out_sop: SOp, vocab: List[str], max_seq_len: int, min_mlp_dim=
         for pos_enc in pos_encs:
             model.positional_encoding += torch.tensor(
                 pos_enc.compile_weights(residual_alloc=residual_alloc, embed_dim=embed_dim, max_seq_len=max_seq_len))
-
-    return model
+    if return_alloc:
+        return model, residual_alloc, flat_sop
+    else:
+        return model

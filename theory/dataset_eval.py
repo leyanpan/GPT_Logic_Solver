@@ -106,6 +106,8 @@ if __name__ == "__main__":
         # Truncate at [SEP] if present
         if "[SEP]" in prompt_tokens:
             prompt_tokens = prompt_tokens[:prompt_tokens.index("[SEP]") + 1]
+        else:
+            prompt_tokens += ["[SEP]"]
 
         if prompt_tokens[0] != "[BOS]":
             prompt_tokens.insert(0, "[BOS]")

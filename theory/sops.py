@@ -1,5 +1,7 @@
 from typing import List, Union, Tuple, Dict
 import numpy as np
+import torch.nn.functional as F
+import torch
 from model import act_map
 
 
@@ -7,9 +9,12 @@ class SOp:
     deps: List['SOp']
     dim: int
 
-    def __init__(self, deps: List['SOp'], dim: int):
+    def __init__(self, deps: List['SOp'], dim: int, name: str = None, **kwargs):
         self.deps = deps
         self.dim = dim
+        self.name = name
+        for k, v in kwargs.items():
+            print(f'Warning: unused kwarg "{k}"')
 
     def __hash__(self):
         # Include the class name, dim, and deps in the hash
@@ -17,12 +22,28 @@ class SOp:
         deps_hash = tuple(self.deps)  # Convert deps list to a tuple for hashing
         return hash((class_name, self.dim, deps_hash))
 
+    def named(self, name: str):
+        self.name = name
+        return self
+
+    def all_named_deps(self, named_deps: dict | None = None):
+        if named_deps is None:
+            named_deps = {}
+        if self.name:
+            named_deps[self.name] = self
+        for dep in self.deps:
+            if isinstance(dep, SOp):
+                dep.all_named_deps(named_deps)
+        return named_deps
+
+
     def abstract_eval(self, tokens: List[str]):
         """
         Abstract evaluation of the operation.
         Represents the result of the operation without any errors.
         """
         raise NotImplementedError
+
 
     def concrete_eval(self, tokens: List[str]):
         """
@@ -114,6 +135,12 @@ class SOp:
         else:
             raise TypeError(f"Invalid index type: {key}")
 
+    def __str__(self):
+        return f"<{self.dim}-D SOp {self.name} of type {self.__class__.__name__}>"
+
+    def __repr__(self):
+        return self.__str__()
+
     def index_by_sop(self, index_sop: 'SOp'):
         """
         Simulates token position indexing, i.e., sop[pos_sop] creates a new index_sop such that
@@ -143,11 +170,12 @@ class SOp:
 
 bos_token = '[BOS]'
 
+config = {"mean_exactness": 20}
 
 # Base SOps
 class PosEncSOp(SOp):
-    def __init__(self, dim):
-        super().__init__([], dim)
+    def __init__(self, dim, **kwargs):
+        super().__init__([], dim, **kwargs)
 
     def compile_weights(self, residual_alloc: Dict[SOp, Tuple], embed_dim: int, max_seq_len: int):
         empty_tokens = [''] * max_seq_len
@@ -163,16 +191,16 @@ class PosEncSOp(SOp):
 
 
 class Ones(PosEncSOp):
-    def __init__(self):
-        super().__init__(1)
+    def __init__(self, **kwargs):
+        super().__init__(1, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         return np.ones((len(tokens), 1))
 
 
 class IsBOS(PosEncSOp):
-    def __init__(self):
-        super().__init__(1)
+    def __init__(self, **kwargs):
+        super().__init__(1, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         ret = np.zeros((len(tokens), 1))
@@ -185,10 +213,10 @@ class ManualArray(PosEncSOp):
     Create a constant positional encoding, usually for test purposes
     """
 
-    def __init__(self, arr: np.ndarray):
+    def __init__(self, arr: np.ndarray, **kwargs):
         self.token_length = arr.shape[0]
         self.arr = arr
-        super().__init__(arr.shape[1])
+        super().__init__(arr.shape[1], **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         assert self.token_length == len(tokens)
@@ -200,8 +228,8 @@ is_bos = IsBOS()
 
 
 class Indices(PosEncSOp):
-    def __init__(self):
-        super().__init__(1)
+    def __init__(self, **kwargs):
+        super().__init__(1, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         return np.arange(len(tokens)).reshape(-1, 1)
@@ -211,13 +239,13 @@ indices = Indices()
 
 
 class TokEmbSOp(SOp):
-    def __init__(self, token_to_id: Dict[str, int], dim: int):
+    def __init__(self, token_to_id: Dict[str, int], dim: int, **kwargs):
         self.token_to_id = token_to_id
         # List of tokens in the order of the token_to_id dictionary
         self.id_to_token = [None] * len(token_to_id)
         for token, idx in token_to_id.items():
             self.id_to_token[idx] = token
-        super().__init__([], dim)
+        super().__init__([], dim, **kwargs)
 
     @property
     def tokens(self):
@@ -236,8 +264,8 @@ class TokEmbSOp(SOp):
 
 
 class OneHotTokEmb(TokEmbSOp):
-    def __init__(self, token_to_id: Dict[str, int]):
-        super().__init__(token_to_id, len(token_to_id))
+    def __init__(self, token_to_id: Dict[str, int], **kwargs):
+        super().__init__(token_to_id, len(token_to_id), **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         # One-hot encode the tokens
@@ -246,11 +274,11 @@ class OneHotTokEmb(TokEmbSOp):
 
 # Linear Transformations that do not require residual allocations or real layers
 class Linear(SOp):
-    def __init__(self, in_sops: List[SOp] | SOp, w: np.ndarray = None):
+    def __init__(self, in_sops: List[SOp] | SOp, w: np.ndarray = None, **kwargs):
         if not isinstance(in_sops, list):
             in_sops = [in_sops]
         self.w = w if w is not None else np.eye(sum(var.dim for var in in_sops))
-        super().__init__(in_sops, self.w.shape[0])
+        super().__init__(in_sops, self.w.shape[0], **kwargs)
         self.check_dims()
 
     def check_dims(self):
@@ -299,7 +327,7 @@ class GLUMLP(SOp):
                  w_lin: np.ndarray = None, b_lin: np.ndarray = None,
                  w_act: np.ndarray = None, b_act: np.ndarray = None,
                  w_out: np.ndarray = None, b_out: np.ndarray = None,
-                 activation: str = "relu"):
+                 activation: str = "relu", **kwargs):
         deps = []
         hidden_size = None
         self.has_act_sops = act_sops is not None
@@ -334,7 +362,7 @@ class GLUMLP(SOp):
         self.activation = activation
 
         # Initialize in variables and other attributes
-        super().__init__(deps, w_out.shape[0])
+        super().__init__(deps, w_out.shape[0], **kwargs)
 
         # Call the dimension check function
         self.check_dimensions()
@@ -470,13 +498,13 @@ class SelfAttention(SOp):
     def __init__(self, q_sops: Linear | List[SOp] | SOp, k_sops: Linear | List[SOp] | SOp,
                  v_sops: Linear | List[SOp] | SOp,
                  w_q: np.ndarray = None, w_k: np.ndarray = None,
-                 w_v: np.ndarray = None, w_o: np.ndarray = None):
+                 w_v: np.ndarray = None, w_o: np.ndarray = None, **kwargs):
         # Force q_sops, k_sops, and v_sops to be Linear Operations. This automatically checks dimensions.
         q, k, v = Linear(q_sops, w_q), Linear(k_sops, w_k), Linear(v_sops, w_v)
         # Output weight matrix w_o
-        self.w_o = w_o if w_o is not None else np.eye(self.v.dim)
+        self.w_o = w_o if w_o is not None else np.eye(v.dim)
         # Make sure q_dim = k_dim and v_dim = w_o_dim
-        super().__init__([q, k, v], self.w_o.shape[0])
+        super().__init__([q, k, v], self.w_o.shape[0], **kwargs)
         self.check_dimensions()
 
     def check_dimensions(self):
@@ -528,8 +556,11 @@ class SelfAttention(SOp):
         attention_scores += causal_mask
 
         # Apply softmax to get attention weights
-        attention_weights = np.exp(attention_scores - np.max(attention_scores, axis=-1, keepdims=True))
-        attention_weights /= np.sum(attention_weights, axis=-1, keepdims=True)
+        # attention_weights = np.exp(attention_scores - np.max(attention_scores, axis=-1, keepdims=True))
+        # attention_weights /= np.sum(attention_weights, axis=-1, keepdims=True)
+
+        attention_scores = torch.tensor(attention_scores)
+        attention_weights = F.softmax(attention_scores, dim=-1).numpy()
 
         # Compute weighted sum of values (attention_weights * V)
         weighted_values = np.dot(attention_weights, v)
@@ -615,9 +646,9 @@ class SelfAttention(SOp):
 
 # Constant SOp by multiplyin ones
 class Const(Linear):
-    def __init__(self, const: float, ones: Ones = ones, dim: int = 1):
+    def __init__(self, const: float, ones: Ones = ones, dim: int = 1, **kwargs):
         self.const = const
-        super().__init__(ones, np.ones((dim, 1)) * const)
+        super().__init__(ones, np.ones((dim, 1), **kwargs) * const)
 
     def abstract_eval(self, tokens: List[str]):
         return np.ones((len(tokens), self.dim)) * self.const
@@ -625,21 +656,21 @@ class Const(Linear):
 
 # Helper SOp to extract specific dimensions from another SOp
 class Extract(Linear):
-    def __init__(self, in_var: SOp, start_dim: int, end_dim: int):
+    def __init__(self, in_var: SOp, start_dim: int, end_dim: int, **kwargs):
         self.in_var = in_var
         self.start_dim = start_dim
         self.end_dim = end_dim
 
         # Matrix for extracting the desired dimensions
         extract_matrix = np.eye(in_var.dim)[start_dim:end_dim, :]
-        super().__init__(in_var, extract_matrix)
+        super().__init__(in_var, extract_matrix, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         return self.in_var.abstract_eval(tokens)[:, self.start_dim:self.end_dim]
 
 
 class Pad(Linear):
-    def __init__(self, in_sop: SOp, out_dim: int, start_dim: int):
+    def __init__(self, in_sop: SOp, out_dim: int, start_dim: int, **kwargs):
         # Store the input parameters
         self.pad_in_sop = in_sop
         self.pad_start_dim = start_dim
@@ -652,7 +683,7 @@ class Pad(Linear):
         w[start_dim:start_dim + in_sop.dim, :] = np.eye(in_sop.dim)
 
         # Initialize the Linear class with in_sop as the dependency and w as the weight matrix
-        super().__init__(in_sop, w)
+        super().__init__(in_sop, w, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         # Directly create a numpy array with the desired padding
@@ -666,32 +697,32 @@ class Pad(Linear):
 
 
 class BroadCast(Linear):
-    def __init__(self, in_var: SOp, dim: int):
+    def __init__(self, in_var: SOp, dim: int, **kwargs):
         assert in_var.dim == 1, "Only 1-dimensional SOps are broadcastable."
         self.in_var = in_var
 
         bc_matrix = np.ones((dim, 1))
-        super().__init__(in_var, bc_matrix)
+        super().__init__(in_var, bc_matrix, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         return self.in_var.abstract_eval(tokens).repeat(self.in_var.dim, axis=1)
 
 
 class MultConst(Linear):
-    def __init__(self, in_var: SOp, const: float):
+    def __init__(self, in_var: SOp, const: float, **kwargs):
         self.in_var = in_var
         self.const = const
 
         # Matrix for multiplying by a constant
         mult_matrix = np.eye(in_var.dim) * const
-        super().__init__(in_var, mult_matrix)
+        super().__init__(in_var, mult_matrix, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         return self.in_var.abstract_eval(tokens) * self.const
 
 
 class AddConst(Linear):
-    def __init__(self, in_var: SOp, const: float, ones: SOp = ones):
+    def __init__(self, in_var: SOp, const: float, ones: SOp = ones, **kwargs):
         self.in_var = in_var
         self.const = const
         self.ones = ones
@@ -699,7 +730,7 @@ class AddConst(Linear):
         ones_vector = np.ones((in_var.dim, 1)) * const
         add_matrix = np.hstack([np.eye(in_var.dim), ones_vector])
 
-        super().__init__([in_var, ones], add_matrix)
+        super().__init__([in_var, ones], add_matrix, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         in_data = self.in_var.abstract_eval(tokens)
@@ -707,7 +738,7 @@ class AddConst(Linear):
 
 
 class MultSOp(GLUMLP):
-    def __init__(self, l_sop: SOp, r_sop: SOp):
+    def __init__(self, l_sop: SOp, r_sop: SOp, **kwargs):
         if l_sop.dim == 1 and r_sop.dim != 1:
             l_sop = BroadCast(l_sop, r_sop.dim)
 
@@ -726,14 +757,14 @@ class MultSOp(GLUMLP):
 
         w_out = np.hstack([np.eye(l_sop.dim), -np.eye(r_sop.dim)])
 
-        super().__init__(act_sops, lin_sops, w_out=w_out)
+        super().__init__(act_sops, lin_sops, w_out=w_out, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         return self.l_var.abstract_eval(tokens) * self.r_var.abstract_eval(tokens)
 
 
 class AddSOp(Linear):
-    def __init__(self, l_sop: SOp, r_sop: SOp):
+    def __init__(self, l_sop: SOp, r_sop: SOp, **kwargs):
         if l_sop.dim == 1 and r_sop.dim != 1:
             l_sop = BroadCast(l_sop, r_sop.dim)
 
@@ -748,7 +779,7 @@ class AddSOp(Linear):
 
         add_matrix = np.hstack([np.eye(l_sop.dim), np.eye(r_sop.dim)])
 
-        super().__init__([l_sop, r_sop], add_matrix)
+        super().__init__([l_sop, r_sop], add_matrix, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         # Perform abstract evaluation by summing the abstract evaluations of l_sop and r_sop
@@ -764,7 +795,7 @@ class GtConst(GLUMLP):
     (in_var - const - err - 1/2 * eps) / eps otherwise
     """
 
-    def __init__(self, in_var: SOp, const: float = 0.0, err=0.5, eps=0.2):
+    def __init__(self, in_var: SOp, const: float = 0.0, err=0.5, eps=0.2, **kwargs):
         self.gt_in_var = in_var
         self.gt_const = const
         self.gt_err = err
@@ -775,41 +806,41 @@ class GtConst(GLUMLP):
         # ReLU(scaled_var) - ReLU(scaled_var - 1)
         act_sops = [scaled_var, scaled_var - 1]
         w_out = np.hstack([np.eye(scaled_var.dim), -np.eye(scaled_var.dim)])
-        super().__init__(act_sops=act_sops, w_out=w_out)
+        super().__init__(act_sops=act_sops, w_out=w_out, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         return self.gt_in_var.abstract_eval(tokens) > self.gt_const + self.gt_err
 
 
 class GtIntSOp(GtConst):
-    def __init__(self, l_var: SOp, r_var: SOp, err=0.5, eps=0.2):
+    def __init__(self, l_var: SOp, r_var: SOp, err=0.5, eps=0.2, **kwargs):
         self.gt_l_var = l_var
         self.gt_r_var = r_var
         zerod_var = (l_var - r_var)
-        super().__init__(zerod_var, err=err, eps=eps)
+        super().__init__(zerod_var, err=err, eps=eps, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         return self.gt_l_var.abstract_eval(tokens) > self.gt_r_var.abstract_eval(tokens) + self.gt_err
 
 
 class GeConst(GtConst):
-    def __init__(self, in_var: SOp, const: float = 0.0, err=0.5, eps=0.2):
+    def __init__(self, in_var: SOp, const: float = 0.0, err=0.5, eps=0.2, **kwargs):
         self.ge_in_var = in_var
         self.ge_const = const
         self.ge_err = err
 
-        super().__init__(in_var, const, -err, eps)
+        super().__init__(in_var, const, -err, eps, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         return self.ge_in_var.abstract_eval(tokens) >= self.ge_const - self.ge_err
 
 
 class GeIntSOp(GeConst):
-    def __init__(self, l_var: SOp, r_var: SOp, err=0.5, eps=0.2):
+    def __init__(self, l_var: SOp, r_var: SOp, err=0.5, eps=0.2, **kwargs):
         self.ge_l_var = l_var
         self.ge_r_var = r_var
         zerod_var = (l_var - r_var)
-        super().__init__(zerod_var, err=err, eps=eps)
+        super().__init__(zerod_var, err=err, eps=eps, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         return self.ge_l_var.abstract_eval(tokens) >= self.ge_r_var.abstract_eval(tokens) - self.ge_err
@@ -826,7 +857,7 @@ class LtConst(GtConst):
     Implementation: -in_var > -const
     """
 
-    def __init__(self, in_var: SOp, const: float = 0.0, err=0.5, eps=0.2):
+    def __init__(self, in_var: SOp, const: float = 0.0, err=0.5, eps=0.2, **kwargs):
         self.lt_in_var = in_var
         self.lt_const = const
         self.lt_err = err
@@ -834,18 +865,18 @@ class LtConst(GtConst):
         gt_in_var = -self.lt_in_var
         gt_const = -self.lt_const
 
-        super().__init__(gt_in_var, gt_const, err, eps)
+        super().__init__(gt_in_var, gt_const, err, eps, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         return self.lt_in_var.abstract_eval(tokens) < self.lt_const - self.lt_err
 
 
 class LtIntSOp(LtConst):
-    def __init__(self, l_var: SOp, r_var: SOp, err=0.5, eps=0.2):
+    def __init__(self, l_var: SOp, r_var: SOp, err=0.5, eps=0.2, **kwargs):
         self.lt_l_var = l_var
         self.lt_r_var = r_var
         zerod_var = (l_var - r_var)
-        super().__init__(zerod_var, err=err, eps=eps)
+        super().__init__(zerod_var, err=err, eps=eps, **kwargs)
 
 
 class LeConst(GtConst):
@@ -859,7 +890,7 @@ class LeConst(GtConst):
     Implementation: -in_var > -const - err
     """
 
-    def __init__(self, in_var: SOp, const: float = 0.0, err=0.5, eps=0.2):
+    def __init__(self, in_var: SOp, const: float = 0.0, err=0.5, eps=0.2, **kwargs):
         self.le_in_var = in_var
         self.le_const = const
         self.le_err = err
@@ -867,18 +898,18 @@ class LeConst(GtConst):
         gt_in_var = -self.le_in_var
         gt_const = -self.le_const
 
-        super().__init__(gt_in_var, gt_const, -err, eps)
+        super().__init__(gt_in_var, gt_const, -err, eps, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         return self.le_in_var.abstract_eval(tokens) <= self.le_const + self.le_err
 
 
 class LeIntSOp(LeConst):
-    def __init__(self, l_var: SOp, r_var: SOp, err=0.5, eps=0.2):
+    def __init__(self, l_var: SOp, r_var: SOp, err=0.5, eps=0.2, **kwargs):
         self.le_l_var = l_var
         self.le_r_var = r_var
         zerod_var = (l_var - r_var)
-        super().__init__(zerod_var, err=err, eps=eps)
+        super().__init__(zerod_var, err=err, eps=eps, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         return self.le_l_var.abstract_eval(tokens) <= self.le_r_var.abstract_eval(tokens) + self.le_err
@@ -893,7 +924,7 @@ class EqConst(Linear):
     (|in_var - const| - (err - 1/2 * eps)) / eps otherwise
     """
 
-    def __init__(self, in_var: SOp, const: float = 0, err=0.5, eps=0.2):
+    def __init__(self, in_var: SOp, const: float = 0, err=0.5, eps=0.2, **kwargs):
         assert err > eps / 2
         self.in_var = in_var
         self.eq_const = const
@@ -903,19 +934,19 @@ class EqConst(Linear):
         zerod_var = (in_var - const)
         comp_sum = (GeConst(in_var, const=const, err=err, eps=eps) + LeConst(in_var, const=const, err=err, eps=eps)) - 1
 
-        super().__init__(comp_sum)
+        super().__init__(comp_sum, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         return np.abs(self.in_var.abstract_eval(tokens) - self.eq_const) <= self.eq_err
 
 
 class EqIntSOp(EqConst):
-    def __init__(self, l_var: SOp, r_var: SOp, err=0.5, eps=0.2):
+    def __init__(self, l_var: SOp, r_var: SOp, err=0.5, eps=0.2, **kwargs):
         self.l_var = l_var
         self.r_var = r_var
 
         zerod_var = (l_var - r_var)
-        super().__init__(zerod_var, err=err, eps=eps)
+        super().__init__(zerod_var, err=err, eps=eps, **kwargs)
 
 
 class LogicalAnd(GtConst):
@@ -925,18 +956,15 @@ class LogicalAnd(GtConst):
         Implementation: b_1 + b_2 - 1
     """
 
-    def __init__(self, l_var: SOp, r_var: SOp):
+    def __init__(self, l_var: SOp, r_var: SOp, **kwargs):
         self.and_l_var = l_var
         self.and_r_var = r_var
 
-        super().__init__(self.and_l_var + self.and_r_var, const=1)
+        super().__init__(self.and_l_var + self.and_r_var, const=1, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         l_var = self.and_l_var.abstract_eval(tokens)
         r_var = self.and_r_var.abstract_eval(tokens)
-        # check if dtype of l_var and r_var are bool
-        if l_var.dtype != np.bool_ or r_var.dtype != np.bool_:
-            print("Warning: Input to logical operation does not have type Bool")
         return np.logical_and(l_var, r_var)
 
 
@@ -951,7 +979,7 @@ class Mean(SelfAttention):
                  v_sops: Linear | List[SOp] | SOp,
                  w_q_mean: np.ndarray = None, w_k_mean: np.ndarray = None,
                  w_v_mean: np.ndarray = None, w_o_mean: np.ndarray = None,
-                 bos_weight=None, exactness: float = 10, eps: float = 1e-3):
+                 bos_weight=None, exactness: float = config["mean_exactness"], eps: float = 1e-3, **kwargs):
         # Store M and eps as class variables
         self.exactness = exactness
         self.eps = eps
@@ -974,7 +1002,7 @@ class Mean(SelfAttention):
         k_sa = self.k_mean * sqrt_ex
 
         # Initialize the SelfAttention superclass with the adjusted weights
-        super().__init__(q_sa, k_sa, self.v_mean, w_o=self.w_o_mean)
+        super().__init__(q_sa, k_sa, self.v_mean, w_o=self.w_o_mean, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         """
@@ -1013,7 +1041,7 @@ class Copy(Mean):
                  bos_weight=None,  # Added bos_weight parameter with default None
                  exactness: float = 10,
                  max_id: float = 100,
-                 eps: float = 0.001):
+                 eps: float = 0.001, **kwargs):
 
         self.max_id = max_id
         sqrt_M = np.sqrt(max_id)
@@ -1034,7 +1062,7 @@ class Copy(Mean):
         mean_q = Concat([self.copy_q * sqrt_M, ones])
         mean_k = Concat([self.copy_k * sqrt_M, indices])
 
-        super().__init__(mean_q, mean_k, self.copy_v, w_o_mean=w_o_mean, exactness=exactness, eps=eps, bos_weight=None)
+        super().__init__(mean_q, mean_k, self.copy_v, w_o_mean=w_o_mean, exactness=exactness, eps=eps, bos_weight=None, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         q, k, v, indices = self.copy_q.abstract_eval(tokens), self.copy_k.abstract_eval(
@@ -1064,7 +1092,7 @@ class Copy(Mean):
 
 
 class IndexBySOp(Mean):
-    def __init__(self, in_sop: Linear | List[SOp] | SOp, index_sop: SOp, indices: SOp = indices, ones: Ones = ones):
+    def __init__(self, in_sop: Linear | List[SOp] | SOp, index_sop: SOp, indices: SOp = indices, ones: Ones = ones, **kwargs):
         self.in_sop = in_sop
         self.index_sop = index_sop
 
@@ -1073,7 +1101,7 @@ class IndexBySOp(Mean):
         mean_q = [index_sop * index_sop, index_sop, ones]
         mean_k = [-ones, 2 * indices, -(indices * indices)]
 
-        super().__init__(q_sops=mean_q, k_sops=mean_k, v_sops=in_sop)
+        super().__init__(q_sops=mean_q, k_sops=mean_k, v_sops=in_sop, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         # Evaluate the inputs and indices
@@ -1108,7 +1136,7 @@ class CPOutput(Linear):
     The final output is the sum of all the contributions from the conditions and outputs, with each contribution weighted by its priority.
     """
 
-    def __init__(self, vocab_size: int, conditions_outputs: List[Tuple[SOp | None, int | SOp, int]], factor: int = 1):
+    def __init__(self, vocab_size: int, conditions_outputs: List[Tuple[SOp | None, int | SOp, int]], factor: int = 1, **kwargs):
         deps = []
         w = np.zeros((vocab_size, 0))  # Initialize an empty weight matrix
 
@@ -1140,7 +1168,7 @@ class CPOutput(Linear):
                     w = np.hstack((w, np.eye(vocab_size) * priority))
                     deps.append(mult_output)
 
-        super().__init__(deps, w)
+        super().__init__(deps, w, **kwargs)
 
     def abstract_eval(self, tokens: List[str]):
         return super().abstract_eval(tokens)

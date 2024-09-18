@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from typing import List
+from typing import List, Dict, Tuple, Any
 
 act_map = {
     'relu': F.relu,
@@ -198,19 +198,64 @@ class TransformerModel(nn.Module):
             out_size = vocab_size
         self.lm_head = nn.Linear(embed_dim, out_size, bias=False)
 
-    def forward(self, input_ids):
+    def forward(self, input_ids, pos_mask=None, residual_alloc: Dict[Any, Tuple[int, int]] = None):
+        """
+        Args:
+            input_ids (torch.Tensor): Tensor of shape (batch_size, seq_length) with token IDs.
+            pos_mask (torch.Tensor, optional): Binary mask of shape (batch_size, seq_length), where 1 indicates
+                                               the position is not a padding token and 0 indicates padding.
+                                               If not provided, assume all positions are non-padding.
+            residual_alloc (Dict[str, Tuple[int, int]], optional): Mapping variable names to allocations
+                                               in the residual stream as (start, end) tuples. Defaults to None.
+        Returns:
+            logits (torch.Tensor): Output logits from the model.
+            residual_dict (dict, optional): If residual_alloc is provided, returns a dictionary mapping
+                                            variable names to residual stream values as numpy arrays.
+        """
         batch_size, seq_length = input_ids.size()
-        x = self.embed_tokens(input_ids) + self.positional_encoding[None, :seq_length, :]
 
+        # If pos_mask is not provided, assume all positions are non-padding
+        if pos_mask is None:
+            pos_mask = torch.ones(batch_size, seq_length, device=input_ids.device).bool()
+
+        # Apply token embeddings
+        x = self.embed_tokens(input_ids)  # Shape: (batch_size, seq_length, embed_dim)
+
+        # Compute effective positions for each non-padding token
+        effective_positions = (pos_mask.cumsum(dim=1) - 1) * pos_mask  # Only count non-padding tokens
+
+        # Apply positional encodings based on the effective positions
+        positional_encodings = self.positional_encoding[:self.max_seq_len, :]  # Get up to max_seq_len positions
+        effective_pos_encodings = positional_encodings[effective_positions]
+        x = x + effective_pos_encodings
+
+        # Create the standard causal mask (seq_length x seq_length)
         causal_mask = torch.tril(torch.ones(seq_length, seq_length, device=x.device)).bool()
-        causal_mask = causal_mask.unsqueeze(0)
 
+        # Expand the causal mask to include the batch dimension and apply pos_mask
+        attention_mask = causal_mask.unsqueeze(0) & pos_mask.unsqueeze(1).unsqueeze(2)
+
+        # Pass through transformer layers with modified attention mask
         for layer in self.layers:
-            x = layer(x, attn_mask=causal_mask)
+            x = layer(x, attn_mask=attention_mask)
 
+        # Apply layer normalization if required
         if self.use_layer_norm:
             x = self.final_layer_norm(x)
+
+        # Final linear layer to produce logits
         logits = self.lm_head(x)
+
+        residual_dict = {}
+        if residual_alloc is not None:
+            for var_name, (start, end) in residual_alloc.items():
+                # Extract the specified slice (start:end) from the final dimension of the residual stream
+                # `x[:, :, start:end]` gets the slice of the residual stream for each token in the batch
+                residual_slice = x[:, :, start:end].detach().cpu().numpy()
+                residual_dict[var_name] = residual_slice
+
+            return logits, residual_dict
+
         return logits
 
     def zero_weights(self):
@@ -218,7 +263,7 @@ class TransformerModel(nn.Module):
         for w in self.parameters():
             w.data.zero_()
 
-    def apply_tokens(self, tokens: List[str]) -> torch.Tensor:
+    def apply_tokens(self, tokens: List[str], residual_alloc: Dict[Any, Tuple[int, int]] = None) -> torch.Tensor:
         """
         Convert a list of tokens to their corresponding IDs and then apply the model.
 
@@ -235,8 +280,7 @@ class TransformerModel(nn.Module):
         input_ids = torch.tensor([self.token_to_id[token] for token in tokens], dtype=torch.long).unsqueeze(0)
 
         # Apply the model
-        logits = self.forward(input_ids)
-        return logits
+        return self.forward(input_ids, residual_alloc=residual_alloc)
 
     def generate(self, prompt: List[str], max_tokens: int = 600, stop_words: List[str] = ['SAT', 'UNSAT']) -> List[str]:
         """

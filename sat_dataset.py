@@ -133,7 +133,11 @@ class SATDataset(Dataset):
             # first get length of unmasked input and determine how much left
             # padding is needed
             input_len = torch.sum(attention_mask)
-            size_left_pad = torch.randint(high=(block_size - input_len), size=(1,)).item()
+            #size_left_pad = torch.randint(high=(block_size - input_len), size=(1,)).item()
+            if block_size > input_len:
+                size_left_pad = torch.randint(high=(block_size - input_len), size=(1,)).item()
+            else:
+                size_left_pad = 0  # or handle this case appropriately
 
             input_ids = self.left_pad(input_ids, size_left_pad, self.tokenizer.pad_token_id, block_size)
             labels = self.left_pad(labels, size_left_pad, -100, block_size)

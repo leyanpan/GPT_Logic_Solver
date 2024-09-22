@@ -331,6 +331,84 @@ class TransformerModel(nn.Module):
 
         return generated_tokens
 
+    def state_generate(self, prompt: List[str], max_tokens: int = 600, stop_words: List[str] = ['SAT', 'UNSAT'],
+                 state_separators: List[str] = ['[BT]']) -> List[str]:
+        """
+        Generate tokens based on the given prompt until a stop word is encountered or the maximum number of tokens is reached.
+        Keeps only one full state in the input to the Transformer by removing previous states after new ones are fully generated.
+        The original prompt is always kept in the input.
+
+        Args:
+            prompt (List[str]): List of tokens to start the generation.
+            max_tokens (int): Maximum number of tokens to generate.
+            stop_words (List[str]): List of stop words that will terminate the generation.
+            state_separators (List[str]): List of tokens that denote the end of a state.
+
+        Returns:
+            List[str]: The generated sequence of tokens.
+        """
+        if self.token_to_id is None:
+            raise ValueError("Vocabulary is not set. Cannot convert tokens to IDs.")
+
+        # Keep the original prompt unchanged
+        prompt_tokens = prompt[:]
+        # Initialize generated tokens (excluding the prompt)
+        generated_tokens = []
+        # Tokens of the current state being generated
+        current_state_tokens = []
+        # Counter for state separators generated
+        num_state_separators_generated = 0
+        sep_id = None
+
+        for _ in range(max_tokens):
+            # Prepare the input to the model: prompt + current state tokens
+            input_tokens = prompt_tokens + current_state_tokens
+
+            # Convert the current tokens to IDs
+            input_ids = torch.tensor([self.token_to_id[token] for token in input_tokens], dtype=torch.long).unsqueeze(0)
+
+            if torch.cuda.is_available():
+                input_ids = input_ids.cuda()
+
+            # Apply the model to get the logits
+            logits = self.forward(input_ids)
+
+            # Get the logits of the last token
+            last_token_logits = logits[:, -1, :]
+
+            # Convert logits to probabilities (softmax)
+            probs = torch.softmax(last_token_logits, dim=-1)
+
+            # Choose the next token (here using argmax; you can change this to sampling if desired)
+            next_token_id = torch.argmax(probs, dim=-1).item()
+
+            # Convert the token ID back to the corresponding token
+            next_token = self.vocab[next_token_id]
+
+            # Append the next token to the generated tokens and current state tokens
+            generated_tokens.append(next_token)
+            current_state_tokens.append(next_token)
+
+            # Check if the generated token is in the stop words
+            if next_token in stop_words:
+                break
+
+            # Check if the generated token is a state separator
+            if next_token in state_separators:
+                num_state_separators_generated += 1
+
+                if num_state_separators_generated >= 2:
+                    # A new state has been fully generated
+                    # Remove the previous state by resetting current_state_tokens to include only the latest state separator
+                    current_state_tokens = current_state_tokens[sep_id:]
+                    # Reset the counter since we now have one state separator in current_state_tokens
+                    num_state_separators_generated = 1
+
+                sep_id = len(current_state_tokens)
+
+        # Return the full sequence: prompt + generated tokens
+        return prompt_tokens + generated_tokens
+
     def find_max_parameter(self):
         """
         Find the maximum parameter value in the model, excluding the positional encodings.

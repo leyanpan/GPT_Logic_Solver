@@ -97,6 +97,7 @@ def dpll(num_vars, num_clauses, context_len, mean_exactness=10, nonsep_penalty=1
                                 v=[indices, 'target'], mean_exactness=mean_exactness, max_id=context_len).named(
         "nearest_sep")
 
+    # The nearest (including self) separator token and whether the previous separator token is '0', '[SEP]', '[UP]', '[BT]'
     p_i_sep_p, b_0, b_SEP, b_UP, b_BackTrack = (
         nearest_sep[:, 0].named("p_i_sep_p"),
         nearest_sep[:, 1].named("b_0"),
@@ -104,13 +105,19 @@ def dpll(num_vars, num_clauses, context_len, mean_exactness=10, nonsep_penalty=1
         nearest_sep[:, 3].named("b_UP"),
         nearest_sep[:, 4].named("b_BackTrack"))
 
+    # The nearest 'D' token, which denotes the next token is a decision literal
     p_i_D = nearest_token(tok_emb=tok_emb, vocab=vocab, targets=['D'], v=indices, mean_exactness=mean_exactness,
                           max_id=context_len).named("p_i_D")
+
     prev_pos = Id([p_i_sep_p, tok_emb[:, idx['D']]])[indices - 1].named("prev_pos")
+    # p_i_sep: The previous (excluding self) separator token
+    # b_decision: whether the current position is a decision literal
     p_i_sep, b_decision = prev_pos[:, 0].named("p_i_sep"), prev_pos[:, 1].named("b_decision")
 
+    # The distance to the nearest separator, i.e., the length of the current state
     d_i_sep = (indices - p_i_sep_p).named("d_i_sep")
 
+    # Attention operation for representing the current clause/assignment as a bitvector of dimension 2d
     p_i_sep_2 = (p_i_sep * p_i_sep).named("p_i_sep_2")
     e_vars = tok_emb[:, : 2 * num_vars].named("e_vars")
     r_i_pre = Mean(q_sops=[p_i_sep_2, p_i_sep, ones],
@@ -118,21 +125,25 @@ def dpll(num_vars, num_clauses, context_len, mean_exactness=10, nonsep_penalty=1
                    v_sops=e_vars, exactness=mean_exactness).named("r_i_pre")
     r_i = (r_i_pre * (indices - p_i_sep)).named("r_i")
 
+    # The position of the previous (excluding self) separator token
     p_i_sep_min = p_i_sep[p_i_sep_p].named("p_i_sep_min")
 
+    # The same position in the previous state. This is used for copying from the previous state
     p_i_min = (p_i_sep_min + d_i_sep + 4 * b_SEP).named("p_i_min")
 
+    # The position of the last decision in the previous state
     p_i_D_min = p_i_D[p_i_sep_p].named("p_i_D_min")
 
-    b_exceed = (p_i_min > (p_i_D_min + 1)).named("b_exceed")
-
+    # Is the next token the literal resulting from backtracking?
     b_D_min = (p_i_D_min == p_i_min + 1).named("b_D_min")
 
+    # Check if the current assignment satisfies the formula (See Theorem Proof for justification)
     sat_q = [r_i, ones]
     sat_k = [-r_i, (-nonsep_penalty) * (1 - tok_emb[:, idx['0']])]
     sat_v = is_bos
     b_sat = (Mean(sat_q, sat_k, sat_v, bos_weight=nonsep_penalty - 0.5, exactness=mean_exactness) > 0).named("b_sat")
 
+    # Check if the current assignment contracdicts the formula (See Theorem Proof for justification)
     unsat_q = [t(r_i, num_vars, true_vec=(1, 0), false_vec=(0, 1), none_vec=(1, 1)), ones]
     unsat_k = sat_k
     unsat_v = 1 - is_bos
@@ -140,6 +151,7 @@ def dpll(num_vars, num_clauses, context_len, mean_exactness=10, nonsep_penalty=1
         "b_cont")
     b_copy_p = (p_i_min < (p_i_sep_p - 1)).named("b_copy_p")
 
+    # Find all literals for unit propagation (See Theorem Proof for justification)
     orig_up_impl = True
     if orig_up_impl:
         up_q = [t(r_i, num_vars, true_vec=(0, 1), false_vec=(1, 0), none_vec=(0, 0)), ones]
@@ -154,20 +166,36 @@ def dpll(num_vars, num_clauses, context_len, mean_exactness=10, nonsep_penalty=1
     e_up = (GLUMLP(act_sops=(o_up - t(r_i, num_vars, true_vec=(1, 1), false_vec=(1, 1), none_vec=(0, 0))))
             - GLUMLP(act_sops=(o_up - 1))).named("e_up")
 
+    # Heuristic for decision literal selection: Find the most common literal in remaining clauses
     heuristic_q = [t(r_i, num_vars, true_vec=(-10, 1), false_vec=(1, -10), none_vec=(0, 0)), ones]
     heuristic_k = up_k
     heuristic_v = r_i
     heuristic_o = SelfAttention(heuristic_q, heuristic_k, heuristic_v).named("heuristic_o")
 
-    b_final = (b_exceed & b_decision).named("b_final")
+    # Whether the current assignment contains no decision literal
     b_no_decision = (p_i_D <= p_i_sep).named("b_no_decision")
+
+    # Whether Backtracking is finished
     b_BT_finish = ((p_i_D_min <= p_i_min) & b_BackTrack).named("b_BT_finish")
+
+    # The negation of the last decision literal in the previous state
     e_BT = t(e_vars[p_i_D_min + 1], num_vars=num_vars, true_vec=(0, 1), false_vec=(1, 0), none_vec=(0, 0)).named("e_BT")
+
+    # The next index in the previous state for copying
     p_i_min_index = (p_i_min + 1).named("p_i_min_index")
+
+    # The next token in the previous state for copying
     e_copy = tok_emb[p_i_min_index].named("e_copy")
+
+    # Whether we've decided that the formula is UNSAT
     b_unsat = (b_no_decision & b_cont).named("b_unsat")
+
+    # Whether we're negativing the last decision literal for backtracking
     b_backtrack = (b_D_min & b_BackTrack).named("b_backtrack")
+
+    # Whether we're copying tokens from the previous state
     b_copy = (b_copy_p & (1 - b_BT_finish)).named("b_copy")
+
     b_BT_token = (b_cont & (1 - tok_emb[:, idx['[BT]']])).named("b_BT_token")
     b_not_D = (1 - tok_emb[:, idx['D']]).named("b_not_D")
     e_unassigned = t(r_i, num_vars, true_vec=(0, 0), false_vec=(0, 0), none_vec=(1, 1)).named("e_unassigned")
@@ -175,7 +203,6 @@ def dpll(num_vars, num_clauses, context_len, mean_exactness=10, nonsep_penalty=1
     out = CPOutput(len(vocab), [(b_sat, idx['SAT'], 16),
                                 (b_unsat, idx['UNSAT'], 15),
                                 (b_BT_token, idx['[BT]'], 14),
-                                #(b_final, idx['[UP]'], 13),
                                 (b_backtrack, Pad(e_BT, len(vocab), idx['1']), 12),
                                 (b_copy, e_copy, 6),
                                 (None, Pad(e_up, len(vocab), idx['1']), 4),
@@ -204,14 +231,13 @@ def dpll(num_vars, num_clauses, context_len, mean_exactness=10, nonsep_penalty=1
         "p_i_sep_min": p_i_sep_min,
         "p_i_min": p_i_min,
         "p_i_D_min": p_i_D_min,
-        "b_exceed": b_exceed,
+        #"b_exceed": b_exceed,
         "b_D_min": b_D_min,
         "b_sat": b_sat,
         "b_cont": b_cont,
         "b_copy_p": b_copy_p,
         "o_up": o_up,
         "e_up": e_up,
-        "b_final": b_final,
         "b_no_decision": b_no_decision,
         "b_BT_finish": b_BT_finish,
         "e_BT": e_BT,

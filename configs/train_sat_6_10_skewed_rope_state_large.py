@@ -1,0 +1,11 @@
+epochs = 5
+block_size = 800
+batch_size = 16
+out_dir = 'models/sat-6-10-random-skewed-state-large'
+dataset = "datasets/SAT_6_10_Skewed_State_Large"
+old_tokenizer = False
+state_trace = True
+rand_pos = False
+perm_vars = True
+mask_formula = True
+model = "llama"

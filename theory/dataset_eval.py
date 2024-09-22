@@ -18,7 +18,8 @@ def parse_arguments() -> argparse.Namespace:
     # Optional arguments with default values in dpll
     parser.add_argument('-m', '--mean_exactness', type=float, default=50, help="Mean exactness (default: 50)")
     parser.add_argument('-p', '--nonsep_penalty', type=float, default=50, help="Non-separation penalty (default: 50)")
-    parser.add_argument('-s', '--samples', type=int, default=None, help="Number of samples (default: all samples)")
+    parser.add_argument('-n', '--samples', type=int, default=None, help="Number of samples (default: all samples)")
+    parser.add_argument('-s', '--state', action='store_true', help="State-based generation method")
 
     return parser.parse_args()
 
@@ -93,8 +94,12 @@ if __name__ == "__main__":
     correct_predictions = 0
     total_samples = len(samples)
 
+    max_clauses = 0  # Max number of clauses (number of '0' tokens in the prompt)
+    max_cot_len = 0  # Max length of Chain-of-Thought (len difference between prompt and generated tokens)
+    max_bt = 0       # Maximum number of backtracking (number of generated '[BT]' tokens)
+
     for sample in samples:
-        prompt_tokens = sample.split()
+        prompt_tokens = sample.strip().split()
 
         # Determine the ground truth label before removing tokens after [SEP]
         ground_truth_label = None
@@ -112,9 +117,27 @@ if __name__ == "__main__":
         if prompt_tokens[0] != "[BOS]":
             prompt_tokens.insert(0, "[BOS]")
 
+        # Update max_clauses (count of '0' in prompt_tokens)
+        num_clauses_in_prompt = prompt_tokens.count('0')
+        if num_clauses_in_prompt > max_clauses:
+            max_clauses = num_clauses_in_prompt
+
         # Generate completion using dpll_model
-        completion_tokens = dpll_model.generate(prompt_tokens)
+        if args.state:
+            completion_tokens = dpll_model.state_generate(prompt_tokens)
+        else:
+            completion_tokens = dpll_model.generate(prompt_tokens)
         print(" ".join(completion_tokens))
+
+        # Update max_cot_len (len difference between prompt and completion)
+        cot_len = len(completion_tokens) - len(prompt_tokens)
+        if cot_len > max_cot_len:
+            max_cot_len = cot_len
+
+        # Update max_bt (number of '[BT]' tokens in completion)
+        num_bt_tokens = completion_tokens.count('[BT]')
+        if num_bt_tokens > max_bt:
+            max_bt = num_bt_tokens
 
         # Determine predicted label from completion
         predicted_label = None
@@ -130,3 +153,8 @@ if __name__ == "__main__":
     # Calculate accuracy
     accuracy = correct_predictions / total_samples
     print(f"Accuracy: {accuracy * 100:.2f}%")
+
+    # Print the requested statistics
+    print(f"Maximum Number of Clauses in Prompt: {max_clauses}")
+    print(f"Maximum Chain-of-Thought Length: {max_cot_len}")
+    print(f"Maximum Number of Backtracking Steps: {max_bt}")

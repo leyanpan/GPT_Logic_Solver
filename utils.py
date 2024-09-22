@@ -71,3 +71,6 @@ def pad_max_len(input_ids, tokenizer, device):
     input = {"input_ids": input_ids}
     res = tokenizer.pad(input, padding=True, return_tensors="pt")
     return [input_id.to(device) for input_id in res['input_ids']]
+
+def get_num_params(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)

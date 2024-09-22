@@ -4,7 +4,7 @@ import os
 from sat_dataset import CustomTokenizer
 import argparse
 import tqdm
-from utils import line_sat, load_model_and_tokenizer, SATStoppingCriteria, is_old_tokenizer, load_conf_file, get_context_size
+from utils import line_sat, load_model_and_tokenizer, SATStoppingCriteria, is_old_tokenizer, load_conf_file, get_context_size, get_num_params
 from sklearn.metrics import (f1_score, 
                              accuracy_score, 
                              precision_score, 
@@ -111,9 +111,11 @@ if __name__ == "__main__":
 
     model, tokenizer = load_model_and_tokenizer(args.model_dir)
 
+
     if args.debug:
         print("Loaded Model", model)
         print("Loaded Tokenizer Vocab", tokenizer.vocab)
+        print("Number of Trainable Params", get_num_params(model))
 
     if args.use_cuda:
         model.to("cuda")

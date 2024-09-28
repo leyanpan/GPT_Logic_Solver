@@ -21,10 +21,11 @@ model_ckpts/
 wandb/
 preds/
 train.txt
+eval_out.txt
 test.txt
 figures/
 temp/
-datasets/SAT_var_eval/*.txt
+datasets/*/*.txt
 results/
 sat_solver/datasets
 outputs/
@@ -32,5 +33,7 @@ result/
 
 sat_solver/datasets
 sat_solver/outputs
+plot/
+theory/*.txt
 
 environment-dev.yml

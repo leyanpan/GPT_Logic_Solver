@@ -167,6 +167,14 @@ class SOp:
         else:
             return Extract(self[pos_sop], dim_idx.start, dim_idx.stop)
 
+    def sum(self, dim: int=1):
+        if dim == 1:
+            return SumDims(self)
+        elif dim == 0:
+            return SumTokens(self)
+        else:
+            raise ValueError("Invalid dim for sum operation, can only be 0 or 1")
+
 
 bos_token = '[BOS]'
 
@@ -1172,3 +1180,10 @@ class CPOutput(Linear):
 
     def abstract_eval(self, tokens: List[str]):
         return super().abstract_eval(tokens)
+
+class SumDims(Linear):
+    def __init__(self, in_var: SOp):
+        super().__init__(in_var, np.ones((1, in_var.dim)))
+
+    def abstract_eval(self, tokens: List[str]):
+        return np.sum(self.deps[0].abstract_eval(tokens), axis=1)

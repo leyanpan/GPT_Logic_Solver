@@ -39,7 +39,10 @@ if __name__ == "__main__":
         # Iterate over all files in the directory
         for filename in os.listdir(args.directory):
             file_path = os.path.join(args.directory, filename)
-            if os.path.isfile(file_path) and filename.endswith('.txt'):
+        
+            # Write the results to a file named eval_out_{filename}_{mean_exactness}.txt
+            output_filename = f"eval_out_{filename.replace('.txt', '')}_{mean_exactness_value}.txt"
+            if os.path.isfile(file_path) and filename.endswith('.txt') and not os.path.exists(output_filename):
                 print(f"Evaluating file: {filename}")
 
                 # Read the file content
@@ -102,8 +105,6 @@ if __name__ == "__main__":
 
                 print(result_str)
 
-                # Write the results to a file named eval_out_{filename}_{mean_exactness}.txt
-                output_filename = f"eval_out_{filename.replace('.txt', '')}_{mean_exactness_value}.txt"
                 with open(output_filename, 'w') as outfile:
                     outfile.write(result_str)
             else:

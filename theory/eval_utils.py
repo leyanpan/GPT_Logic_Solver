@@ -57,7 +57,7 @@ def evaluate_model(dpll_model, samples, tokens, dpll_sop, args, print_results=Fa
 
         # Generate completion using the appropriate method
         if args.abstract:
-            completion_tokens = sop_generate(prompt_tokens, tokens, dpll_sop)
+            completion_tokens = sop_generate(prompt_tokens, tokens, dpll_sop, max_generation_length=args.context_len - len(prompt_tokens) - 1)
         elif args.state:
             completion_tokens = dpll_model.state_generate(prompt_tokens)
         else:

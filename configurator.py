@@ -34,17 +34,21 @@ for arg in sys.argv[1:]:
         assert arg.startswith('--')
         key, val = arg.split('=')
         key = key[2:]
-        if key in globals():
+
+        if key in globals() or key == 'train_file':  # Added check for 'train_file'
             try:
-                # attempt to eval it it (e.g. if bool, number, or etc)
+                # attempt to eval it (e.g., if bool, number, etc.)
                 attempt = literal_eval(val)
             except (SyntaxError, ValueError):
-                # if that goes wrong, just use the string
+                # if it fails, just use the string value
                 attempt = val
-            # ensure the types match ok
-            assert type(attempt) == type(globals()[key]) or globals()[key] is None
-            # cross fingers
-            print(f"Overriding: {key} = {attempt}")
+
+            # Ensure the types match or that the key is valid
+            if key in globals():
+                assert type(attempt) == type(globals()[key]) or globals()[key] is None
             globals()[key] = attempt
+
+            print(f"Overriding: {key} = {attempt}")
         else:
             raise ValueError(f"Unknown config key: {key}")
+

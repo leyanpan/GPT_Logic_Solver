@@ -95,33 +95,3 @@ For batch evaluation on multiple `.txt` files, use `folder_eval.py`:
    ```bash
    python folder_eval.py models/sat-llama ./datasets/Large_500k_SAT_11_15_marginal_large results.txt
    ```
-
----
-
-## Multi-GPU Training
-
-To run training on multiple GPUs, use the following commands:
-
-1. Configure `accelerate`:
-
-   ```bash
-   accelerate config
-   ```
-
-2. Launch training:
-
-   ```bash
-   accelerate launch gpt_train.py configs/train_config_ss.py
-   ```
-
----
-
-## Multi-Node/Multi-GPU Operations
-
-We have experimented with training jobs on multi-node/multi-GPU setups on our own cluster and Georgia Tech's super-compute cluster. This approach is still experimental, and we are assessing its impact on performance.
-
-To submit a multi-node/multi-GPU job:
-
-   ```bash
-   sbatch multi_node
-   ```

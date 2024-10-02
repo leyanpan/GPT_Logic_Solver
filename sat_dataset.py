@@ -32,7 +32,7 @@ class CustomTokenizer(PreTrainedTokenizer):
     def _convert_id_to_token(self, id):
         return self.ids_to_tokens.get(id)
 
-    def tokenize(self, text, **kwargs):
+    def tokenize(self, text):
         return text.split()
 
     def save_vocabulary(self, save_directory: str, filename_prefix: str | None = None) -> Tuple[str]:
@@ -41,20 +41,20 @@ class CustomTokenizer(PreTrainedTokenizer):
             for token in self.vocab.keys():
                 writer.write(token + "\n")
         return (vocab_file,)
-
+    
     def get_vocab(self):
         return self.vocab
-
+    
     def get_vocab_size(self):
         return len(self.vocab)
-
+    
     @property
     def vocab_size(self) -> int:
         """
         `int`: Size of the base vocabulary (without the added tokens).
         """
         return len(self.vocab)
-
+    
 
 # Custom dataset class
 class SATDataset(Dataset):
@@ -66,7 +66,7 @@ class SATDataset(Dataset):
         self.permute_constants = permute_constants
         self.mask_formula = mask_formula
         self.old_tokenizer = old_tokenizer
-
+        
         self.examples = []
         with open(file_path, 'r') as f:
             for line in f:
@@ -78,18 +78,18 @@ class SATDataset(Dataset):
 
     def __len__(self):
         return len(self.examples)
-
+    
     def left_pad(self, tensor, pad_size, pad_with, block_size):
         p = torch.tensor([pad_with] * pad_size)
 
         return torch.cat((p, tensor))[0:block_size]
-
+    
     def multiple_replace(self, string, rep_dict):
         # https://stackoverflow.com/questions/6116978/how-to-replace-multiple-substrings-of-a-string
         # note that iterating over the map causes substrings replaced earler to be replaced again; hence the need for this function
         pattern = re.compile("|".join([re.escape(k) for k in sorted(rep_dict,key=len,reverse=True)]), flags=re.DOTALL)
         return pattern.sub(lambda x: rep_dict[x.group(0)], string)
-
+    
     def constant_permuter(self, line):
         constants = list(range(1, self.max_id + 1))
         permutation = random.sample(constants, len(constants))
@@ -133,20 +133,21 @@ class SATDataset(Dataset):
             # first get length of unmasked input and determine how much left
             # padding is needed
             input_len = torch.sum(attention_mask)
-            #size_left_pad = torch.randint(high=(block_size - input_len), size=(1,)).item()
+            
             if block_size > input_len:
                 size_left_pad = torch.randint(high=(block_size - input_len), size=(1,)).item()
             else:
-                size_left_pad = 0  # or handle this case appropriately
+                size_left_pad = 0  # No padding if input_len >= block_size
+
 
             input_ids = self.left_pad(input_ids, size_left_pad, self.tokenizer.pad_token_id, block_size)
             labels = self.left_pad(labels, size_left_pad, -100, block_size)
             attention_mask = self.left_pad(attention_mask, size_left_pad, 0, block_size)
-
-
+        
+        
         # Return a dictionary with input_ids and labels
         return {"input_ids": input_ids.long(), "labels": labels.long(), "attention_mask": attention_mask}
-
+    
 class SATDatasetForRL(SATDataset):
     def __getitem__(self, i):
         line = self.examples[i]
@@ -161,7 +162,7 @@ class SATDatasetForRL(SATDataset):
 
         if not self.old_tokenizer:
             line = line.replace("- ", "-")
-
+        
         split = line.find("[SEP]") + len("[SEP]")
         query = line[:split]
         response = line[(split + 1):]
@@ -186,14 +187,14 @@ if __name__ == "__main__":
 
     DATASET_PATH = "./datasets/SAT_6_10_Marginal_Old/train.txt"
     dataset = SATDatasetForRL(
-        DATASET_PATH,
-        tokenizer,
-        block_size,
+        DATASET_PATH, 
+        tokenizer, 
+        block_size, 
         max_id,
         old_tokenizer=True,
         permute_constants=True
     )
-
+    
     # i = torch.randint(0, len(dataset), (1,)).item()
     i = 0
     test_item = dataset.__getitem__(i)

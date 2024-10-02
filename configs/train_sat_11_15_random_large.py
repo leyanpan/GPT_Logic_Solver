@@ -1,0 +1,14 @@
+epochs = 5
+n_layer=6
+n_embd=512
+n_head=8
+block_size = 850
+batch_size = 16
+out_dir = 'models/11_15_random'
+dataset = "datasets/SAT_11_15_Random_State_Large"
+old_tokenizer = False
+state_trace = True
+rand_pos = False
+perm_vars = True
+mask_formula = True
+model = "llama"

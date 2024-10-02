@@ -1,92 +1,127 @@
-# HF_SAT
-SAT Solving LLMs using the HuggingFace library.
 
-# GPT Logic Solver
+# Transformer in SAT Solving
 
-This repository contains code for training and evaluating a GPT-based model on a SAT (Satisfiability) problem dataset. The model is trained to classify SAT and UNSAT problems, leveraging the Hugging Face `transformers` library.
+This repository contains code for training and evaluating a GPT-based model on SAT (Satisfiability) problem datasets. The model classifies SAT and UNSAT problems using the Hugging Face transformers library.
+
+---
 
 ## Environment Setup
 
-To set up the environment, use the `environment.yml` file. This file contains the necessary dependencies, including PyTorch, Hugging Face libraries, and other tools.
+To set up the environment, follow these steps:
 
-Run the following command to create and activate the environment:
+1. Use the `environment.yml` file to install the necessary dependencies (PyTorch, Hugging Face libraries, etc.).
+2. Run the following commands to create and activate the environment:
 
-```bash
-conda env create -f environment.yml
-conda activate HF_SAT
+   ```bash
+   conda env create -f environment.yml
+   conda activate HF_SAT
+   ```
+
+---
 
 ## Datasets
-Each dataset have it's corresponding folder in `datasets/`. The folders typically only contain a script for downloading the dataset. Before using the each dataset, you would need to first switch to the corresponding dataset directory and execute `prepare.py`. For example, to prepare the SAT_6_10 dataset, execute:
-```
-cd datasets/SAT_6_10
-python prepare.py
-```
+
+Each dataset has its corresponding folder in the `datasets/` directory. These folders typically contain scripts for downloading and preparing the datasets.
+
+To prepare a dataset, navigate to its directory and run `prepare.py`. For example, to prepare the `SAT_6_10` dataset:
+
+   ```bash
+   cd datasets/SAT_6_10
+   python prepare.py
+   ```
+
+---
 
 ## Training
-### Configs
-To organize training arguments for training pipelines, various config files are located in the `configs\` diretory. They are composed of individual python files that include custom training hyperparameters. These typically include the training dataset, model save path (without timestamp), and context size. To create a new training pipeline (e.g. for a new dataset), create a new config file in the `configs\` directory that includes all the custom parameters for the training process.
 
-The detailed list of configurable training hyperparameters can be viewed in `gpt_train.py` in the `### Parameters ###` section. The following configurable parameters are commonly used:
-`out_dir`: The basepath to save to model. A timestamp will be added to the end of the path to prevent overwrite. To disable timestamp, set `append_timestamp` (also a parameter) to `False`.
+### Configuration
 
-`block_size`: the context size of the LLM to be trained.
+Training configurations are stored as Python files in the `configs/` directory. Each file contains custom training hyperparameters, including:
 
-`dataset`: the training dataset to use. This is typically a directory in `datasets/`
+- **Dataset path**
+- **Model save path** (with or without a timestamp)
+- **Context size** for the model
 
-(This method is adapted from nanoGPT)
+To create a new training configuration, add a new Python file in `configs/` and define the necessary parameters. A list of commonly used configurable parameters can be found in the `### Parameters ###` section of `gpt_train.py`, including:
 
-### gpt_train.py
-To train a model on a dataset, the following basic command would typically suffice:
-```
-python gpt_train.py --model_name llama-70M --train_file path/to/train.txt
+- `out_dir`: The base path to save the model. A timestamp is added by default to avoid overwriting; to disable this, set `append_timestamp=False`.
+- `block_size`: The context size for the model.
+- `dataset`: The training dataset, usually a directory in `datasets/`.
 
-```
-If you need to have custom hyperparameter configuration for the particular purpose of training, you can also add additional options using the commandline in the following form:
-```
-python gpt_train.py configs/[YOUR TRAINING CONFIG].py [--VAR_NAME=VAR_VALUE]
-```
-for example, to set the number of epochs to 12 using the base config file for configs/train_sat_6_10.py:
-```
-python gpt_train.py configs/train_sat_6_10.py --epochs=12
-```
+(This method is adapted from nanoGPT.)
 
-PS: If you get
-```
-    File "<string>", line 26, in <module>
-AssertionError
-```
-check if you used space instead of `=` for one of the parameters or have any formatting errors. You can dive in `configurator.py` to see exactly where the error occured according to the line number in the error.
+### Running Training
+
+To train a model using a basic configuration, use the following command:
+
+   ```bash
+   python gpt_train.py --model_name llama-70M --train_file path/to/train.txt
+   ```
+
+To use custom hyperparameters, specify them in the command:
+
+   ```bash
+   python gpt_train.py configs/[YOUR_TRAINING_CONFIG].py --epochs=12
+   ```
+
+If you encounter an `AssertionError`, check for issues like spaces instead of `=` in the parameter assignments. You can debug using `configurator.py` to locate the error.
+
+---
 
 ## Evaluation
-Currently, the evaluation focusing on the accuracy of the model to predict SAT/UNSAT of CNF formulas. To evaluate a model on a dataset:
-```
-python eval.py --dataset=[Dataset Path] --model_dir=[Your downloaded Model Folder] --num_samples=[Number of Test Samples to Evaluate]
-```
-Note that the evaluation of a single sample is much slower than training because the model needs to incrementally generate each token and does not use batches (TODO: use batches using eval). Therefore, `num_samples` is typically set to 100 for initial evaluation.
+
+The evaluation process focuses on measuring the model's accuracy in predicting SAT/UNSAT for CNF formulas.
+
+To evaluate a model on a dataset, use:
+
+   ```bash
+   python eval.py --dataset=[Dataset Path] --model_dir=[Model Directory] --num_samples=[Number of Test Samples]
+   ```
+
+*Note*: Evaluation can be slower than training since token generation occurs incrementally and without batching. Typically, `num_samples` is set to 100 for initial evaluation.
 
 ### Batch Evaluation
-You can run batch evaluation on multiple .txt files in a folder using the folder_eval.py script.
 
-Example for For Linux
-```
-./folder_eval.sh ./model_checkpoints/6_10_random_ ./datasets/SAT_var_eval > 6_10_random.txt
+For batch evaluation on multiple `.txt` files, use `folder_eval.py`:
 
-```
-Example for windows 
-```
-python folder_eval.py models/sat-llama ./datasets/Large_500k_SAT_11_15_marginal_large results.txt
+- **Linux**:
 
-```
+   ```bash
+   ./folder_eval.sh ./model_checkpoints/6_10_random_ ./datasets/SAT_var_eval > 6_10_random.txt
+   ```
 
-## Running on Multi-GPUs
-```
-accelerate config
-accelerate launch gpt_train.py configs/train_config_ss.py
-```
-## For operations on Multi-Node/Multi-GPU
+- **Windows**:
 
-Currently we are running jobs on both our own and GT's super-compute cluster on individual compute-engines. However, we have experimented with training jobs on multi-node/multi-GPU, but this is still experimental, and we have not 
-thoroughly assessed the impact of these runs on performance if any. 
+   ```bash
+   python folder_eval.py models/sat-llama ./datasets/Large_500k_SAT_11_15_marginal_large results.txt
+   ```
 
-To execute a multi-node/multi-GPU job run sbatch multi_node
+---
 
+## Multi-GPU Training
+
+To run training on multiple GPUs, use the following commands:
+
+1. Configure `accelerate`:
+
+   ```bash
+   accelerate config
+   ```
+
+2. Launch training:
+
+   ```bash
+   accelerate launch gpt_train.py configs/train_config_ss.py
+   ```
+
+---
+
+## Multi-Node/Multi-GPU Operations
+
+We have experimented with training jobs on multi-node/multi-GPU setups on our own cluster and Georgia Tech's super-compute cluster. This approach is still experimental, and we are assessing its impact on performance.
+
+To submit a multi-node/multi-GPU job:
+
+   ```bash
+   sbatch multi_node
+   ```

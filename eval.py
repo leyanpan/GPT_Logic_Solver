@@ -10,7 +10,7 @@ from sklearn.metrics import (f1_score,
                              precision_score, 
                              recall_score)
 
-def batch_generate_completions(input_file, model, tokenizer, batch_size, max_length, stop_criteria=None, debug=False):
+def batch_generate_completions(input_file, model, tokenizer, batch_size, max_length, num_samples, stop_criteria=None, debug=False):
     completions = []
     true_labels = []
     pred_labels = []
@@ -27,9 +27,12 @@ def batch_generate_completions(input_file, model, tokenizer, batch_size, max_len
 
     gen_config.pad_token_id = tokenizer.pad_token_id
     gen_config.eos_token_id = tokenizer.pad_token_id
+
+    if num_samples is None:
+        num_samples = len(lines)
     
-    for i in tqdm.tqdm(range(0, len(lines), batch_size)):
-        batch_lines = lines[i:i+batch_size]
+    for i in tqdm.tqdm(range(0, num_samples, batch_size)):
+        batch_lines = lines[i:min(i+batch_size, num_samples - 1)]
         batch_prompts = [line[:line.find("[SEP]") + len("[SEP]")] for line in batch_lines]
         batch_true_labels = [line_sat(line) for line in batch_lines]
         true_labels.extend(batch_true_labels)
@@ -76,6 +79,7 @@ def parse_args():
     parser.add_argument("dataset", type=str, default=None, help="The path to the dataset.")
     parser.add_argument("-c", "--config", type=str, default=None, help="The path to the config file.")
     parser.add_argument("-l", "--max_len", type=int, default=850, help="The maximum length of the generated completions.")
+    parser.add_argument("-n", "--num_samples", type=int, default=None, help="The number of samples to generate.")
     parser.add_argument("-i", "--max_id", type=int, default=30, help="The maximum variable ID in the dataset.")
     parser.add_argument("-b", "--batch_size", type=int, default=16, help="The batch size to use during generation.")
     parser.add_argument("-f", "--file_name", type=str, default='test.txt', help="The name of the file in the dataset to evaluate on.")
@@ -128,6 +132,7 @@ if __name__ == "__main__":
                                                                     batch_size=args.batch_size, 
                                                                     max_length=args.max_len,
                                                                     stop_criteria=stop_criteria,
+                                                                    num_samples=args.num_samples,
                                                                     debug=args.debug)
 
 

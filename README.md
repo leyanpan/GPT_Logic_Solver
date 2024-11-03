@@ -45,7 +45,7 @@ check if you used space instead of `=` for one of the parameters or have any for
 ## Evaluation
 Currently, the evaluation focusing on the accuracy of the model to predict SAT/UNSAT of CNF formulas. To evaluate a model on a dataset:
 ```
-python eval.py --dataset=[Dataset Path] --model_dir=[Your downloaded Model Folder] --num_samples=[Number of Test Samples to Evaluate]
+python eval.py MODEL_PATH DATASET_PATH
 ```
 Note that the evaluation of a single sample is much slower than training because the model needs to incrementally generate each token and does not use batches (TODO: use batches using eval). Therefore, `num_samples` is typically set to 100 for initial evaluation.
 

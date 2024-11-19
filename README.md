@@ -2,36 +2,36 @@
 SAT Solving LLMs using the HuggingFace library.
 
 ## Datasets
-Each dataset have it's corresponding folder in `datasets/`. The folders typically only contain a script for downloading the dataset. Before using the each dataset, you would need to first switch to the corresponding dataset directory and execute `prepare.py`. For example, to prepare the SAT_6_10 dataset, execute:
-```
+Each dataset has its corresponding folder in `[datasets/](datasets/)`. The folders typically only contain a script for downloading the dataset. Before using each dataset, you would need to first switch to the corresponding dataset directory and execute `prepare.py`. For example, to prepare the SAT_6_10 dataset, execute:
+```bash
 cd datasets/SAT_6_10
 python prepare.py
 ```
 
 ## Training
 ### Configs
-To organize training arguments for training pipelines, various config files are located in the `configs\` diretory. They are composed of individual python files that include custom training hyperparameters. These typically include the training dataset, model save path (without timestamp), and context size. To create a new training pipeline (e.g. for a new dataset), create a new config file in the `configs\` directory that includes all the custom parameters for the training process.
+To organize training arguments for training pipelines, various config files are located in the `configs/` directory. They are composed of individual python files that include custom training hyperparameters. These typically include the training dataset, model save path (without timestamp), and context size. To create a new training pipeline (e.g. for a new dataset), create a new config file in the `configs/` directory that includes all the custom parameters for the training process.
 
 The detailed list of configurable training hyperparameters can be viewed in `gpt_train.py` in the `### Parameters ###` section. The following configurable parameters are commonly used:
-`out_dir`: The basepath to save to model. A timestamp will be added to the end of the path to prevent overwrite. To disable timestamp, set `append_timestamp` (also a parameter) to `False`.
+`out_dir`: The basepath to save the model. A timestamp will be added to the end of the path to prevent overwrite. To disable timestamp, set `append_timestamp` (also a parameter) to `False`.
 
 `block_size`: the context size of the LLM to be trained.
 
-`dataset`: the training dataset to use. This is typically a directory in `datasets/`
+`dataset`: the training dataset to use. This is typically a directory in [datasets/](datasets/)
 
-(This method is adapted from nanoGPT)
+(This method is adapted from [nanoGPT](https://github.com/karpathy/nanoGPT))
 
 ### gpt_train.py
 To train a model on a dataset, the following basic command would typically suffice:
-```
+```python
 python gpt_train.py configs/[YOUR TRAINING CONFIG].py
 ```
 If you need to have custom hyperparameter configuration for the particular purpose of training, you can also add additional options using the commandline in the following form:
-```
+```bash
 python gpt_train.py configs/[YOUR TRAINING CONFIG].py [--VAR_NAME=VAR_VALUE]
 ```
 for example, to set the number of epochs to 12 using the base config file for configs/train_sat_6_10.py:
-```
+```bash
 python gpt_train.py configs/train_sat_6_10.py --epochs=12
 ```
 

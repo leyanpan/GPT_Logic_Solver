@@ -37,3 +37,5 @@ plot/
 theory/*.txt
 
 environment-dev.yml
+.aider*
+.env

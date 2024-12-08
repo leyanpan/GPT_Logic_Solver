@@ -1,6 +1,6 @@
 # Converts the trace portion each line in a SAT dataset file
 # Original Trace Format: ( decision propogation propogation ... ( decision propogation propogation ... <CC> conflict clause </CC>) )
-# New Trace Format: Traslate all progations to clauses using implication 
+# New Trace Format: Traslate all progations to clauses using implication
 # (i.e. the negation of the decision variables and the propogation variable form a clause)
 # Format: propogation clause 1 0 propogation clause 2 0 ...  0 conflict clause 0
 # Also use suffix unit clauses to denote the final assignments if the formula is SAT
@@ -17,12 +17,12 @@ def parse_line(line):
         line = line[:-3].strip()
     else:
         raise ValueError(f"Unknown result {line}")
-    
+
     line = line.replace('- ', '-')
-    
+
     # Extract the formula and the trace from the line
     formula_part, trace_part = line.split("[SEP]")
-    
+
     # Return the parsed formula and the trace string
     return formula_part, trace_part.strip(), res
 
@@ -98,6 +98,8 @@ def parse_raw_file(fn):
     problems = []
     with open(fn) as f:
         for line in f:
+            if '[SEP]' in line:
+                line = line[:line.index('[SEP]')]
             num_vars = 0
             clauses = []
             cur_clause = []
@@ -117,10 +119,10 @@ def parse_raw_file(fn):
 # if __name__ == "__main__":
 #     # Get the input file path
 #     input_file_path = sys.argv[1]
-    
+
 #     # Get the output file path
 #     output_file_path = sys.argv[2]
-    
+
 #     # Open the input file
 #     with open(input_file_path, 'r') as input_file:
 #         # Open the output file
@@ -129,10 +131,10 @@ def parse_raw_file(fn):
 #             for line in input_file:
 #                 # Parse the line
 #                 formula, trace, res = parse_line(line)
-                
+
 #                 # Translate the trace
 #                 trace = translate_trace(trace, res)
-                
+
 #                 # Write the line to the output file
 #                 output_file.write(f"{formula}[SEP] {trace} {res}\n")
-            
+

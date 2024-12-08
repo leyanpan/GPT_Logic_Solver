@@ -171,7 +171,7 @@ if __name__ == '__main__':
     # Print the DataFrames (optional)
     for data_type, df in dataframes.items():
         print(f"\nDataFrame for {data_type}:")
-        print(df[['num_vars', 'max_c', 'max_cot', 'max_bt', 'avg_cot', 'avg_bt']])
+        print(df[['num_vars', 'max_cot']])
 
     # Plot the scaling of max_cot
     plot_max_cot(dataframes)

@@ -17,12 +17,11 @@ def parse_filename(filename):
     dataset_indices = []
     for idx, part in enumerate(parts):
         for dataset_type in dataset_types:
-            if dataset_type == part.lower():
+            if dataset_type == part:
                 dataset_indices.append((idx, dataset_type))
                 break  # Stop checking other dataset types
 
     if len(dataset_indices) < 2:
-        print(f"Skipping {filename}")
         return None
 
     # Model name is everything before the first dataset type
@@ -167,6 +166,11 @@ def main():
     # For each model, plot accuracy over variable numbers
     models = df_eval['Model'].unique()
     for model in models:
+        split_name = model.split('_')
+        model_l, model_r = split_name[0], split_name[1]
+        if int(model_l) != train_var_min:
+            print(f"Skipping model {model} that does not match training regime.")
+            continue
         df_model = df_eval[df_eval['Model'] == model]
         df_model = df_model.sort_values('Num Vars')
         train_dataset = df_model['Train Dataset'].iloc[0]  # Assuming all entries have the same train dataset

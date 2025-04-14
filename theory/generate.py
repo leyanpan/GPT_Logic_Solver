@@ -1,5 +1,5 @@
-from dpll import dpll
-from compiler import compile_model
+from .dpll import dpll
+from .compiler import compile_model
 import torch
 import argparse
 

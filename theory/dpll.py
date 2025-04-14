@@ -1,5 +1,5 @@
-from sops import *
-import sops
+from .sops import *
+from . import sops
 import numpy as np
 from typing import List, Dict, Tuple
 
@@ -93,7 +93,7 @@ def t(encodings: SOp, num_vars, true_vec=(1, 0), false_vec=(0, 1), none_vec=(0, 
     return Linear([encodings, ones], np.hstack([mat.T, bias.reshape((-1, 1))]))
 
 
-def dpll(num_vars, num_clauses, context_len, mean_exactness=10, nonsep_penalty=10, return_logs=False) -> Tuple[
+def dpll(num_vars, num_clauses, context_len, mean_exactness=10, nonsep_penalty=10, return_logs=False, heuristic=True) -> Tuple[
     SOp, List, Dict[str, SOp]]:
     vocab: List = ([str(i) for i in range(1, num_vars + 1)]
                    + [str(-i) for i in range(1, num_vars + 1)]
@@ -157,13 +157,15 @@ def dpll(num_vars, num_clauses, context_len, mean_exactness=10, nonsep_penalty=1
     sat_q = [r_i, ones]
     sat_k = [-r_i, (-nonsep_penalty) * (1 - tok_emb[:, idx['0']])]
     sat_v = is_bos
-    b_sat = (Mean(sat_q, sat_k, sat_v, bos_weight=nonsep_penalty - 0.5, exactness=mean_exactness) > 0).named("b_sat")
+    raw_sat = Mean(sat_q, sat_k, sat_v, bos_weight=nonsep_penalty - 0.5, exactness=mean_exactness)
+    b_sat = (raw_sat > 0).named("b_sat")
 
     # Check if the current assignment contracdicts the formula (See Theorem Proof for justification)
     unsat_q = [t(r_i, num_vars, true_vec=(1, 0), false_vec=(0, 1), none_vec=(1, 1)), ones]
     unsat_k = sat_k
     unsat_v = 1 - is_bos
-    b_cont = (Mean(unsat_q, unsat_k, unsat_v, bos_weight=nonsep_penalty - 0.5, exactness=mean_exactness) > 0).named(
+    raw_cont = Mean(unsat_q, unsat_k, unsat_v, bos_weight=nonsep_penalty - 0.5, exactness=mean_exactness)
+    b_cont = (raw_cont > 0).named(
         "b_cont")
     b_copy_p = (p_i_min < (p_i_sep_p - 1)).named("b_copy_p")
 
@@ -245,7 +247,7 @@ def dpll(num_vars, num_clauses, context_len, mean_exactness=10, nonsep_penalty=1
                                 (b_copy, e_copy, 6),
                                 (None, Pad(e_up, len(vocab), idx['1']), 4),
                                 (b_not_D, idx['D'], 3),
-                                (None, Pad(e_unassigned + heuristic_o,
+                                (None, Pad(e_unassigned + heuristic_o if heuristic else e_unassigned,
                                            out_dim=len(vocab), start_dim=idx['1']), 1)
                                 ]).named("out")
 
@@ -270,9 +272,11 @@ def dpll(num_vars, num_clauses, context_len, mean_exactness=10, nonsep_penalty=1
         "p_i_min": p_i_min,
         "p_i_D_min": p_i_D_min,
         "b_D_min": b_D_min,
+        "raw_sat": raw_sat,
         "b_sat": b_sat,
         "unsat_q": Linear(unsat_q),
         "unsat_k": Linear(unsat_k),
+        "raw_cont": raw_cont,
         "b_cont": b_cont,
         "b_copy_p": b_copy_p,
         # Original implementation variables

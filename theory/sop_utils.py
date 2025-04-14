@@ -1,4 +1,4 @@
-from sops import SOp
+from .sops import SOp
 from typing import List
 
 def sop_generate(prompt_tokens: List[str], id_to_token: List[str], sop: SOp, stop_tokens: List[str] = ["SAT", "UNSAT"], max_generation_length: int = 800) -> List[str]:

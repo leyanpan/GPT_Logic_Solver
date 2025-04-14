@@ -1,12 +1,12 @@
 # evaluate_all.py
 
-from dpll import dpll
-from compiler import compile_model
+from .dpll import dpll
+from .compiler import compile_model
 import torch
 import argparse
 import os
 
-from eval_utils import evaluate_model, infer_args_from_file  # Import functions
+from .eval_utils import evaluate_model, infer_args_from_file  # Import functions
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate the DPLL model on all files in a directory")
@@ -39,7 +39,7 @@ if __name__ == "__main__":
         # Iterate over all files in the directory
         for filename in os.listdir(args.directory):
             file_path = os.path.join(args.directory, filename)
-        
+
             # Write the results to a file named eval_out_{filename}_{mean_exactness}.txt
             output_filename = f"eval_out_{filename.replace('.txt', '')}_{mean_exactness_value}.txt"
             if os.path.isfile(file_path) and filename.endswith('.txt') and not os.path.exists(output_filename):

@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from sops import SOp, ManualArray  # Import relevant classes
+from .sops import SOp, ManualArray  # Import relevant classes
 
 
 class TestSOpOperatorOverrides(unittest.TestCase):

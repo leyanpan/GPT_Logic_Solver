@@ -2,7 +2,7 @@ from typing import List, Union, Tuple, Dict
 import numpy as np
 import torch.nn.functional as F
 import torch
-from model import act_map
+from .model import act_map
 
 
 class SOp:
@@ -539,7 +539,7 @@ class SelfAttention(SOp):
     def hidden_size(self):
         return max(self.q.dim, self.k.dim, self.v.dim)
 
-    def _selfattention_core_eval(self, tokens: List[str], eval_func):
+    def _selfattention_core_eval(self, tokens: List[str], eval_func, return_attn_map = False):
         """
         Core logic for evaluation, can be used by both abstract_eval and concrete_eval.
 
@@ -575,14 +575,24 @@ class SelfAttention(SOp):
 
         # Apply the output weight matrix w_o
         output = np.dot(weighted_values, self.w_o.T)
-
-        return output
+        if return_attn_map:
+            return output, attention_weights
+        else:
+            return output
 
     def abstract_eval(self, tokens: List[str]):
         """
         Abstract evaluation of the self-attention operation.
         """
         return self._selfattention_core_eval(tokens, lambda sop, t: sop.abstract_eval(t))
+
+    def get_attn_weight(self, tokens: List[str]):
+        """
+        Get the attention map (n * n matrix, each row sums to 1) of this sop on a given input sequence.
+        Uses abstract evaluation
+        """
+        _, attn_weight = self._selfattention_core_eval(tokens, lambda sop, t: sop.abstract_eval(t), return_attn_map=True)
+        return attn_weight
 
     def concrete_eval(self, tokens: List[str]):
         """
@@ -1186,4 +1196,4 @@ class SumDims(Linear):
         super().__init__(in_var, np.ones((1, in_var.dim)))
 
     def abstract_eval(self, tokens: List[str]):
-        return np.sum(self.deps[0].abstract_eval(tokens), axis=1)
+        return np.sum(self.deps[0].abstract_eval(tokens), axis=-1)

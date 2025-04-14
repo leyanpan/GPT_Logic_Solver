@@ -1,4 +1,4 @@
-from sop_utils import sop_generate
+from .sop_utils import sop_generate
 from typing import List
 
 

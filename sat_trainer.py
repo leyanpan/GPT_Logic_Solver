@@ -33,11 +33,12 @@ class SATHFTrainer(Trainer):
 
     def training_step(self, 
                       model, 
-                      inputs):
+                      inputs,
+                      num_items_in_batch=None):
         '''
         TODO
         '''
-        outputs = super().training_step(model, inputs)
+        outputs = super().training_step(model, inputs, num_items_in_batch)
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         
         return outputs

@@ -11,6 +11,8 @@ from transformers import (AutoModel,
                           PreTrainedTokenizer,
                           Trainer,
                           TrainingArguments,
+                          MambaForCausalLM,
+                          MambaConfig,
                           get_linear_schedule_with_warmup,
                           get_cosine_schedule_with_warmup)
 
@@ -91,31 +93,79 @@ if model == "gpt2":
     model = GPT2LMHeadModel(config)
 
     total_params = sum(p.numel() for p in model.parameters())
-    print(f"Total Parameters: {total_params}")
+    print(f"GPT-2 Total Parameters: {total_params}")
 
     if load_model is not None:
+        print(f"Loading pre-trained GPT-2 model from: {load_model}")
         model = GPT2LMHeadModel.from_pretrained(load_model)
 
 elif model == "llama":
-
     if load_model is not None:
+        print(f"Loading pre-trained Llama model from: {load_model}")
         model = LlamaForCausalLM.from_pretrained(load_model)
     else:
         # For RoPE Encoding
         config = LlamaConfig(vocab_size=len(tokenizer.vocab),
                             max_position_embeddings=block_size,
                             num_hidden_layers=n_layer,
-                            num_attention_heads=n_head,
+                            num_attention_heads=n_head, # Llama uses n_head
                             hidden_size=n_embd,
-                            intermediate_size=4 * n_embd, # Where did 11008 even come from?
+                            intermediate_size=4 * n_embd, # Common Llama setting
                             bos_token_id=tokenizer.vocab["[EOS]"],
                             eos_token_id=tokenizer.vocab["[EOS]"],
+                            # Add pad_token_id if your tokenizer has one, e.g.
+                            # pad_token_id=tokenizer.pad_token_id
                             )
 
         model = LlamaForCausalLM(config)
+        total_params = sum(p.numel() for p in model.parameters())
+        print(f"Llama Total Parameters (Initialized): {total_params}")
+
+
+# --- Add Mamba Section ---
+elif model == "mamba":
+    if load_model is not None:
+        print(f"Loading pre-trained Mamba model from: {load_model}")
+        # Use MambaForCausalLM for loading language models
+        model = MambaForCausalLM.from_pretrained(load_model)
+        # Note: Parameter count will be inherent to the loaded model
+        total_params = sum(p.numel() for p in model.parameters())
+        print(f"Mamba Total Parameters (Loaded): {total_params}")
+    else:
+        # Initialize Mamba configuration
+        # Map common parameters: vocab_size, hidden_size (n_embd), num_hidden_layers (n_layer)
+        # Use tokenizer's EOS for bos/eos tokens like other examples
+        # Keep Mamba-specific params (state_size, expand, conv_kernel, etc.) at defaults
+        config = MambaConfig(
+            vocab_size=len(tokenizer.vocab),
+            hidden_size=n_embd,
+            num_hidden_layers=n_layer,
+            bos_token_id=tokenizer.vocab["[EOS]"],
+            eos_token_id=tokenizer.vocab["[EOS]"],
+            # --- Mamba specific defaults (can be overridden if needed) ---
+            # state_size=16,  # Default state space dimension
+            # expand=2,       # Default expansion factor for intermediate layer
+            # conv_kernel=4,  # Default conv kernel size
+            # pad_token_id=0, # Default pad token id (adjust if tokenizer differs)
+            # use_bias=False, # Default
+            # use_conv_bias=True, # Default
+            # hidden_act="silu", # Default
+            # initializer_range=0.1, # Default
+            # time_step_rank="auto", # Default (depends on hidden_size)
+            # residual_in_fp32=True, # Default
+            # use_cache=True, # Default: Important for efficient generation
+            # use_mambapy=False, # Default, False uses the faster CUDA kernel if available
+        )
+
+        # Initialize Mamba model for Causal LM
+        model = MambaForCausalLM(config)
+
+        total_params = sum(p.numel() for p in model.parameters())
+        print(f"Mamba Total Parameters (Initialized): {total_params}")
 
 else:
-    raise ValueError("Invalid model type. Please choose either 'gpt2' or 'llama'.")
+    raise ValueError(f"Unsupported model type: {model}")
+
 
 
 

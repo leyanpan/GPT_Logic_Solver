@@ -1,0 +1,12 @@
+epochs = 5
+block_size = 800
+batch_size = 16
+out_dir = 'models/sat-6-10-marginal-rope-state-large-mamba'
+dataset = "datasets/SAT_6_10_Marginal_State_Large_remove_up"
+old_tokenizer = False
+state_trace = True
+rand_pos = False
+perm_vars = True
+mask_formula = True
+model = "mamba"
+n_embd=1280

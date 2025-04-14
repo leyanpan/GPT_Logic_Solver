@@ -1,13 +1,13 @@
 # evaluation_script.py
 
-from dpll import dpll
-from compiler import compile_model
+from .dpll import dpll
+from .compiler import compile_model
 import torch
 import argparse
 from typing import List
 import os
 
-from eval_utils import evaluate_model, infer_args_from_file  # Import the evaluate_model function
+from .eval_utils import evaluate_model, infer_args_from_file  # Import the evaluate_model function
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Parse arguments for the DPLL function")

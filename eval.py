@@ -32,7 +32,7 @@ def batch_generate_completions(input_file, model, tokenizer, batch_size, max_len
         num_samples = len(lines)
     
     for i in tqdm.tqdm(range(0, num_samples, batch_size)):
-        batch_lines = lines[i:min(i+batch_size, num_samples - 1)]
+        batch_lines = lines[i:min(i+batch_size, num_samples)]
         batch_prompts = [line[:line.find("[SEP]") + len("[SEP]")] for line in batch_lines]
         batch_true_labels = [line_sat(line) for line in batch_lines]
         true_labels.extend(batch_true_labels)
@@ -108,21 +108,33 @@ if __name__ == "__main__":
 
     if args.out_file is None:
         args.out_file = os.path.join("preds",f"{os.path.basename(args.model_dir)}_{os.path.basename(args.dataset)}_{args.file_name}")
-        print(f"Writing to {args.out_file}.")
+    print(f"Writing to {args.out_file}.")
 
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
 
     model, tokenizer = load_model_and_tokenizer(args.model_dir)
 
-
     if args.debug:
-        print("Loaded Model", model)
+        print("===== Model Debug Info =====")
+        print("Model:", model)  # or model.__class__.__name__
+        print("Configuration:", model.config)
         print("Loaded Tokenizer Vocab", tokenizer.vocab)
-        print("Number of Trainable Params", get_num_params(model))
+        print(f" - Number of layers: {model.config.num_hidden_layers}")
+        print(f" - Hidden size: {model.config.hidden_size}")
+        print(f" - Num attention heads: {model.config.num_attention_heads}")
+        print(f" - Vocab size: {model.config.vocab_size}")
+        print(f" - Max position embeddings: {model.config.max_position_embeddings}")
+        print(f" - Number of Trainable Params: {get_num_params(model):,}")
+        for name, param in model.named_parameters():
+            print(name, param.shape, param.numel())
+        print("===== End Debug Info =====")
+
 
     if args.use_cuda:
         model.to("cuda")
+
+    
 
     stop_criteria = SATStoppingCriteria(tokenizer)
     stop_criteria = StoppingCriteriaList([stop_criteria]) if args.stop_crit else None

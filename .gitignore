@@ -13,8 +13,8 @@ val.npy
 meta.pkl
 
 llama_finetune_sat.py
-models/
 temp/
+models/
 figures/
 
 model_ckpts/
@@ -35,7 +35,13 @@ sat_solver/datasets
 sat_solver/outputs
 plot/
 theory/*.txt
+config_backup/
 
 environment-dev.yml
 .aider*
 .env
+*.png
+*.jpg
+
+
+raw_data/

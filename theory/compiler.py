@@ -4,8 +4,8 @@ from copy import deepcopy
 
 import torch
 
-from sops import SOp, SelfAttention, GLUMLP, Linear, PosEncSOp, TokEmbSOp, Id
-from model import TransformerModel, TransformerBlock
+from .sops import SOp, SelfAttention, GLUMLP, Linear, PosEncSOp, TokEmbSOp, Id
+from .model import TransformerModel, TransformerBlock
 
 
 def topological_sort(start_sop: SOp) -> List[SOp]:

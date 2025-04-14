@@ -33,6 +33,8 @@ if __name__ == "__main__":
 
     dpll_model = compile_model(dpll_sop, tokens, args.context_len)
 
+    print(dpll_model.summary())
+
     # Move model to GPU if available
     if torch.cuda.is_available():
         dpll_model.cuda()
